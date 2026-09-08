@@ -8,7 +8,9 @@ The workbench is intended to let industrial teams use AI without sending confide
 
 **Implemented and verified — Phase 1: Foundation & Local LLM Backend.** The current backend provides a modular FastAPI application, local Ollama integration, health/model checks, a chat API, configuration, safe logging, and unit tests.
 
-**Planned — Phases 2–10.** Document ingestion, RAG, OCR, vision, multi-model routing, agents, sandboxes, deliverable generation, a React workbench, and enterprise security controls are not implemented yet.
+**Complete and verified — Phase 2: Document Ingestion & Processing.** The backend stores local PDF, TXT, and DOCX uploads under generated identifiers and extracts text deterministically. OCR, RAG, vision, and LLM document analysis remain unimplemented.
+
+**Planned — Phases 3–10.** RAG, OCR, vision, multi-model routing, agents, sandboxes, deliverable generation, a React workbench, and enterprise security controls are not implemented yet.
 
 ## Current architecture
 
@@ -64,6 +66,11 @@ OLLAMA_MODEL=qwen3:8b
 | --- | --- |
 | `GET /api/health` | Backend, local Ollama, and configured-model status |
 | `POST /api/chat` | Send a message to the configured local model |
+| `POST /api/documents/upload` | Store and extract one local PDF, TXT, or DOCX file |
+| `GET /api/documents` | List document metadata |
+| `GET /api/documents/{document_id}` | Retrieve one document's metadata |
+| `GET /api/documents/{document_id}/text` | Retrieve extracted text for development/testing |
+| `DELETE /api/documents/{document_id}` | Delete the stored document, text, and metadata |
 
 Example:
 
@@ -86,7 +93,7 @@ Phase 1 rejects non-local Ollama URLs and uses no cloud AI API. Logs record oper
 
 ## Roadmap and limitations
 
-Phase 2 is document ingestion and deterministic PDF/TXT/DOCX extraction. The full phased plan is in [Development Roadmap](docs/DEVELOPMENT_ROADMAP.md). Current limitations include one configured model, no authentication, no document processing, no OCR/vision/RAG, and no frontend.
+The full phased plan is in [Development Roadmap](docs/DEVELOPMENT_ROADMAP.md). Current limitations include one configured model, no authentication, no OCR/vision/RAG, and no frontend. Scanned or image-only PDFs report `ocr_required`; Phase 2 does not perform OCR.
 
 ## SIH 2026
 

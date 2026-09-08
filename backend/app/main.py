@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.api.routes import chat, health
+from app.api.routes import chat, documents, health
 from app.core.logging_config import configure_logging
 
 
@@ -24,4 +24,5 @@ def root():
 
 
 app.include_router(chat.router)
+app.include_router(documents.router)
 app.include_router(health.router)

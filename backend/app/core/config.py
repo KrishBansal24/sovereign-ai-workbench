@@ -37,6 +37,8 @@ class Settings:
     ollama_model: str
     ollama_timeout_seconds: float
     log_level: str
+    max_upload_size_mb: int
+    data_directory: Path
 
 
 def get_settings() -> Settings:
@@ -46,17 +48,22 @@ def get_settings() -> Settings:
     )
     model = os.getenv("OLLAMA_MODEL", "qwen3:8b").strip()
     timeout_seconds = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
+    max_upload_size_mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20"))
 
     if not model:
         raise ValueError("OLLAMA_MODEL cannot be empty.")
     if timeout_seconds <= 0:
         raise ValueError("OLLAMA_TIMEOUT_SECONDS must be greater than zero.")
+    if max_upload_size_mb <= 0:
+        raise ValueError("MAX_UPLOAD_SIZE_MB must be greater than zero.")
 
     return Settings(
         ollama_base_url=base_url,
         ollama_model=model,
         ollama_timeout_seconds=timeout_seconds,
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
+        max_upload_size_mb=max_upload_size_mb,
+        data_directory=ENV_FILE.parent / "data",
     )
 
 

@@ -31,3 +31,24 @@ Successful response:
 ```
 
 An empty or missing message returns 422. Unavailable Ollama returns 503. A missing configured model returns 404. An invalid/unexpected local runtime response returns 502. Swagger at `/docs` supplies the live OpenAPI schema.
+
+## `POST /api/documents/upload`
+
+Purpose: upload one PDF, TXT, or DOCX document, store it locally under a generated identifier, and extract text without an LLM. Send multipart form-data with a `file` field. Maximum size is controlled by `MAX_UPLOAD_SIZE_MB` (20 MB by default).
+
+Example response:
+
+```json
+{"document_id":"uuid","filename":"inspection_report.pdf","file_type":"pdf","size_bytes":1234,"status":"processed","text_extracted":true,"character_count":900,"extraction_status":"extracted","page_count":3}
+```
+
+Invalid type, MIME mismatch, empty file, excessive size, corrupt file, or unreadable encrypted PDF returns 422. Text-poor PDFs are stored successfully with `extraction_status: "ocr_required"`; no OCR is attempted.
+
+## Document retrieval
+
+- `GET /api/documents` lists metadata newest first.
+- `GET /api/documents/{document_id}` returns one metadata record.
+- `GET /api/documents/{document_id}/text` returns extracted text for development/testing.
+- `DELETE /api/documents/{document_id}` deletes the stored file, extracted text, and metadata.
+
+An unknown or malformed document ID returns 404. Internal filesystem paths are never returned.

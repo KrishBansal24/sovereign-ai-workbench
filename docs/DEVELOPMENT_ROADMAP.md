@@ -3,8 +3,8 @@
 | Phase | Status | Objective | Depends on |
 | --- | --- | --- | --- |
 | 1 — Foundation & Local LLM Backend | **Complete and verified** | Modular local FastAPI and Ollama chat foundation | — |
-| 2 — Document Ingestion & Processing | **Next** | Local PDF/TXT/DOCX storage and deterministic extraction | Phase 1 |
-| 3 — Multi-Model Support & Router | Planned | Model management and task-aware routing | Phases 1–2 |
+| 2 — Document Ingestion & Processing | **Complete and verified** | Local PDF/TXT/DOCX storage and deterministic extraction | Phase 1 |
+| 3 — Multi-Model Support & Router | **Next** | Model management and task-aware routing | Phases 1–2 |
 | 4 — Local Knowledge Base / RAG | Planned | Local indexing and retrieval | Phases 2–3 |
 | 5 — Agentic Engine & Tool Calling | Planned | Multi-step task execution | Phases 3–4 |
 | 6 — Multimodal Intelligence | Planned | OCR and vision workflows | Phases 2–5 |
