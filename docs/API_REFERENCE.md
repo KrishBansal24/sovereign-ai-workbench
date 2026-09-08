@@ -52,3 +52,17 @@ Invalid type, MIME mismatch, empty file, excessive size, corrupt file, or unread
 - `DELETE /api/documents/{document_id}` deletes the stored file, extracted text, and metadata.
 
 An unknown or malformed document ID returns 404. Internal filesystem paths are never returned.
+
+## `GET /api/models`
+
+Lists application-registered local models with role, capabilities, enabled state, and current Ollama availability. It never accepts or reveals arbitrary filesystem model locations.
+
+## `POST /api/chat/auto`
+
+Classifies a task locally, routes it to a registered model, and returns a normal response plus explainable routing metadata.
+
+```json
+{"message":"Write a Python function that parses CSV data.","model":"coding"}
+```
+
+`model` is optional and may only be the registered IDs `general` or `coding`; unknown IDs return 400. If the preferred coding model is unavailable but general is available, the response records `fallback_used: true`. No cloud fallback exists.

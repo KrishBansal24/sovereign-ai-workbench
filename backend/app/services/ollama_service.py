@@ -26,11 +26,14 @@ class OllamaService:
         self.settings = app_settings
 
     def chat(self, message: str) -> str:
+        return self.chat_with_model(self.settings.ollama_model, message)
+
+    def chat_with_model(self, model: str, message: str) -> str:
         try:
             response = requests.post(
                 f"{self.settings.ollama_base_url}/api/chat",
                 json={
-                    "model": self.settings.ollama_model,
+                    "model": model,
                     "messages": [{"role": "user", "content": message}],
                     "stream": False,
                 },
@@ -68,20 +71,18 @@ class OllamaService:
     def is_model_available(self) -> bool:
         """Return whether the configured model appears in Ollama's local model list."""
         try:
-            response = requests.get(
-                f"{self.settings.ollama_base_url}/api/tags",
-                timeout=min(self.settings.ollama_timeout_seconds, 5),
-            )
-            response.raise_for_status()
-            data = response.json()
-            models = data["models"]
-            return any(
-                model.get("name") == self.settings.ollama_model
-                or model.get("model") == self.settings.ollama_model
-                for model in models
-            )
-        except (requests.RequestException, KeyError, TypeError, ValueError):
+            return self.settings.ollama_model in self.get_available_model_names()
+        except OllamaUnavailableError:
             return False
+
+    def get_available_model_names(self) -> set[str]:
+        try:
+            response = requests.get(f"{self.settings.ollama_base_url}/api/tags", timeout=min(self.settings.ollama_timeout_seconds, 5))
+            response.raise_for_status()
+            models = response.json()["models"]
+            return {model.get("name") or model.get("model") for model in models if model.get("name") or model.get("model")}
+        except (requests.RequestException, KeyError, TypeError, ValueError) as error:
+            raise OllamaUnavailableError("Local Ollama is unavailable.") from error
 
 
 ollama_service = OllamaService()

@@ -11,6 +11,7 @@ Industrial prompts and documents may contain proprietary processes, equipment de
 - Prompts and model responses are not written to normal application logs.
 - Service errors are translated to safe messages rather than Python stack traces.
 - `.env`, runtime data, outputs, caches, and virtual environments are excluded from version control.
+- Model overrides accept only registered application IDs, not arbitrary Ollama model names.
 
 ## Planned controls
 

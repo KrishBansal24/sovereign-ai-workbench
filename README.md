@@ -10,7 +10,9 @@ The workbench is intended to let industrial teams use AI without sending confide
 
 **Complete and verified — Phase 2: Document Ingestion & Processing.** The backend stores local PDF, TXT, and DOCX uploads under generated identifiers and extracts text deterministically. OCR, RAG, vision, and LLM document analysis remain unimplemented.
 
-**Planned — Phases 3–10.** RAG, OCR, vision, multi-model routing, agents, sandboxes, deliverable generation, a React workbench, and enterprise security controls are not implemented yet.
+**Complete and verified — Phase 3: Multi-Model Support & Router.** Registered local general and coding roles are selected through an explainable local classifier and safe fallback.
+
+**Planned — Phases 4–10.** Local RAG, OCR, vision, agents, sandboxes, deliverable generation, a React workbench, and enterprise security controls are not implemented yet.
 
 ## Current architecture
 
@@ -71,6 +73,8 @@ OLLAMA_MODEL=qwen3:8b
 | `GET /api/documents/{document_id}` | Retrieve one document's metadata |
 | `GET /api/documents/{document_id}/text` | Retrieve extracted text for development/testing |
 | `DELETE /api/documents/{document_id}` | Delete the stored document, text, and metadata |
+| `GET /api/models` | List registered local models and availability |
+| `POST /api/chat/auto` | Automatically route a task to a registered local model |
 
 Example:
 

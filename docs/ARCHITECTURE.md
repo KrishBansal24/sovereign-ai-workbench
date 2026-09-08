@@ -1,6 +1,6 @@
 # Architecture
 
-Status: Phase 1 and Phase 2 are complete and verified. Phase 3 is next; Phases 4–10 are planned.
+Status: Phases 1–3 are complete and verified. Phase 4 is next; Phases 5–10 are planned.
 
 ## Current architecture — implemented
 
@@ -36,6 +36,14 @@ Frontend → FastAPI → Task Router → Model Manager → Agent Engine → Tool
                                                                ├─ Python sandbox
                                                                └─ Deliverable generation
 ```
+
+## Model routing architecture — implemented in Phase 3
+
+```text
+Prompt → Task classifier → Model router → Model manager/registry → Ollama service → selected local model
+```
+
+The classifier uses high-confidence task patterns for coding, debugging, code explanation, document analysis, summarization, and general reasoning. Ambiguous requests deliberately use the general capability. The router maps task type to a capability; the manager selects only registered, enabled, locally available models and uses the general model as the coding fallback.
 
 ## Principles
 

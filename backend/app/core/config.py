@@ -39,6 +39,8 @@ class Settings:
     log_level: str
     max_upload_size_mb: int
     data_directory: Path
+    general_model: str
+    coding_model: str
 
 
 def get_settings() -> Settings:
@@ -47,11 +49,13 @@ def get_settings() -> Settings:
         os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
     )
     model = os.getenv("OLLAMA_MODEL", "qwen3:8b").strip()
+    general_model = os.getenv("GENERAL_MODEL", model).strip()
+    coding_model = os.getenv("CODING_MODEL", "qwen2.5-coder:7b").strip()
     timeout_seconds = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
     max_upload_size_mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20"))
 
-    if not model:
-        raise ValueError("OLLAMA_MODEL cannot be empty.")
+    if not model or not general_model or not coding_model:
+        raise ValueError("Configured model names cannot be empty.")
     if timeout_seconds <= 0:
         raise ValueError("OLLAMA_TIMEOUT_SECONDS must be greater than zero.")
     if max_upload_size_mb <= 0:
@@ -64,6 +68,8 @@ def get_settings() -> Settings:
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         max_upload_size_mb=max_upload_size_mb,
         data_directory=ENV_FILE.parent / "data",
+        general_model=general_model,
+        coding_model=coding_model,
     )
 
 
