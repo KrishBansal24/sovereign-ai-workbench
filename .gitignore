@@ -1,0 +1,61 @@
+# Python and virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+env/
+backend/venv/
+
+# Tests and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# Environment configuration (keep safe templates)
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Logs and runtime output
+*.log
+logs/
+outputs/*
+!outputs/.gitkeep
+
+# Uploaded and processed local documents
+data/*
+!data/.gitkeep
+backend/data/*
+!backend/data/.gitkeep
+uploads/
+
+# Local AI model artifacts and caches
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+.ollama/
+model_cache/
+models/
+
+# IDE and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
