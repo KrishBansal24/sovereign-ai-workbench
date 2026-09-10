@@ -14,6 +14,8 @@ The workbench is intended to let industrial teams use AI without sending confide
 
 **Complete and verified — Phase 4: Local Knowledge Base / RAG.** Selected Phase 2 documents can be indexed locally, searched semantically, and used to ground answers with backend-derived sources.
 
+**Implemented — Phase 5: Controlled Agent Tools.** A bounded local agent can use only registered knowledge, document, and calculator tools; manual verification is pending.
+
 **Planned — Phases 5–10.** OCR, vision, agents, sandboxes, deliverable generation, a React workbench, and enterprise security controls are not implemented yet.
 
 ## Current architecture

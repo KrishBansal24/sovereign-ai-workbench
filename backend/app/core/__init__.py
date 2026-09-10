@@ -1,1 +1,1 @@
-"""Core application configuration and cross-cutting utilities."""
+"""Cross-cutting configuration and logging utilities for the application."""

@@ -1,3 +1,5 @@
+"""Unit and route tests for deterministic task classification and model routing."""
+
 from fastapi.testclient import TestClient
 
 from app.api.routes import auto_chat as auto_chat_route
@@ -26,8 +28,12 @@ def test_classifier_handles_core_task_families():
 
 
 def test_router_selects_coding_and_uses_general_fallback(monkeypatch):
-    general = RegisteredModel("general", "General", "general:latest", ("general",), True, 1, None, "")
-    coding = RegisteredModel("coding", "Coding", "coding:latest", ("coding",), True, 1, "general", "")
+    general = RegisteredModel(
+        "general", "General", "general:latest", ("general",), True, 1, None, ""
+    )
+    coding = RegisteredModel(
+        "coding", "Coding", "coding:latest", ("coding",), True, 1, "general", ""
+    )
     manager = ModelManager(registry=(general, coding))
     monkeypatch.setattr(manager, "available_ids", lambda: {"coding", "general"})
     router = ModelRouter(manager)
@@ -42,7 +48,12 @@ def test_auto_chat_allows_registered_override_and_rejects_unknown(monkeypatch):
     manager = ModelManager()
     monkeypatch.setattr(manager, "available_ids", lambda: {"general", "coding"})
     monkeypatch.setattr(auto_chat_route, "model_router", ModelRouter(manager))
-    monkeypatch.setattr(auto_chat_route.ollama_service, "chat_with_model", lambda model, message: "local response")
+    # Avoid real inference while retaining the full request/routing boundary.
+    monkeypatch.setattr(
+        auto_chat_route.ollama_service,
+        "chat_with_model",
+        lambda model, message: "local response",
+    )
     success = client.post("/api/chat/auto", json={"message": "Hello", "model": "general"})
     assert success.status_code == 200
     assert success.json()["routing"]["selected_model_id"] == "general"

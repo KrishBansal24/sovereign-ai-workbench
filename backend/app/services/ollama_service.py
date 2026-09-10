@@ -1,4 +1,8 @@
-"""Local Ollama client used by the API layer."""
+"""Local-only HTTP client for Ollama generation and model availability.
+
+All inference stays on the loopback endpoint validated by core configuration;
+this service deliberately provides no cloud fallback.
+"""
 
 import requests
 
@@ -22,14 +26,39 @@ class OllamaResponseError(OllamaServiceError):
 
 
 class OllamaService:
+    """Encapsulate local Ollama request construction, timeouts, and safe errors."""
+
     def __init__(self, app_settings: Settings = settings) -> None:
+        """Create a client using the supplied localhost-only application settings.
+
+        Args:
+            app_settings: Configured local endpoint, model names, and timeout.
+        """
         self.settings = app_settings
 
     def chat(self, message: str) -> str:
+        """Generate with the configured default local model.
+
+        Args:
+            message: User content to send as one non-streaming chat turn.
+
+        Returns:
+            Assistant text returned by local Ollama.
+        """
         return self.chat_with_model(self.settings.ollama_model, message)
 
     def chat_with_model(self, model: str, message: str) -> str:
+        """Generate one non-streaming response using a registered local model.
+
+        Args:
+            model: Exact approved Ollama model tag selected by the router.
+            message: User content to send as one non-streaming chat turn.
+
+        Returns:
+            Assistant text returned by local Ollama.
+        """
         try:
+            # SECURITY: URL originates from localhost-only Settings, not user input.
             response = requests.post(
                 f"{self.settings.ollama_base_url}/api/chat",
                 json={
@@ -57,7 +86,11 @@ class OllamaService:
             raise OllamaResponseError("Local Ollama returned an invalid response.") from error
 
     def is_available(self) -> bool:
-        """Return whether the configured local Ollama server responds."""
+        """Return whether the configured local Ollama server responds.
+
+        Returns:
+            ``True`` when the local tags endpoint returns successfully.
+        """
         try:
             response = requests.get(
                 f"{self.settings.ollama_base_url}/api/tags",
@@ -69,15 +102,27 @@ class OllamaService:
         return True
 
     def is_model_available(self) -> bool:
-        """Return whether the configured model appears in Ollama's local model list."""
+        """Return whether the configured model appears in Ollama's local model list.
+
+        Returns:
+            ``True`` when the configured default model has a local tag.
+        """
         try:
             return self.settings.ollama_model in self.get_available_model_names()
         except OllamaUnavailableError:
             return False
 
     def get_available_model_names(self) -> set[str]:
+        """Return exact locally installed Ollama tags or raise a controlled error.
+
+        Returns:
+            Set of exact model tags reported by the local Ollama daemon.
+        """
         try:
-            response = requests.get(f"{self.settings.ollama_base_url}/api/tags", timeout=min(self.settings.ollama_timeout_seconds, 5))
+            response = requests.get(
+                f"{self.settings.ollama_base_url}/api/tags",
+                timeout=min(self.settings.ollama_timeout_seconds, 5),
+            )
             response.raise_for_status()
             models = response.json()["models"]
             return {model.get("name") or model.get("model") for model in models if model.get("name") or model.get("model")}

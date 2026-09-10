@@ -1,3 +1,5 @@
+"""HTTP smoke tests for health and basic local-chat routes."""
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -8,6 +10,7 @@ client = TestClient(app)
 
 
 def test_health_reports_available_local_services(monkeypatch):
+    # Isolate the route contract from a running local Ollama daemon.
     monkeypatch.setattr(ollama_service, "is_available", lambda: True)
     monkeypatch.setattr(ollama_service, "is_model_available", lambda: True)
 

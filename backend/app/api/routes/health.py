@@ -1,3 +1,5 @@
+"""Health endpoint delegating local Ollama availability checks to its service."""
+
 import logging
 
 from fastapi import APIRouter
@@ -16,6 +18,12 @@ logger = logging.getLogger(__name__)
     description="Returns backend health without sending any information outside the local machine.",
 )
 def health() -> dict[str, str]:
+    """Report backend and configured local-model availability.
+
+    The route delegates connection checks to ``OllamaService`` and returns
+    operational status only; it never sends a prompt or document externally.
+    """
+    # SECURITY: health checks use only the localhost-only URL from Settings.
     ollama_available = ollama_service.is_available()
     model_status = (
         "available" if ollama_available and ollama_service.is_model_available() else "unavailable"

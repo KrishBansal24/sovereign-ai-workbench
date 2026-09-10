@@ -1,56 +1,26 @@
 # Architecture
 
-Status: Phases 1–3 are complete and verified. Phase 4 is next; Phases 5–10 are planned.
-
-## Current architecture — implemented
-
-```text
-API Client
-  ↓
-FastAPI routes and Pydantic schemas
-  ↓
-Ollama service
-  ↓
-Local Ollama API (localhost only)
-  ↓
-Configured Qwen3 8B model
-```
-
-Routes own HTTP concerns; `OllamaService` owns local runtime requests; `core/config.py` owns environment settings. This separation prevents API routes from becoming tied to a model or HTTP client.
-
-## Document ingestion architecture — implemented in Phase 2
+`app.main` composes FastAPI routes, schemas validate API input, and services
+own local Ollama integration, model routing, documents, and RAG.
 
 ```text
-Upload → validation → generated document ID → local storage → selected parser → extracted text + JSON metadata
+Route -> Pydantic validation -> service -> local persistence or localhost Ollama
 ```
 
-`DocumentService` owns storage and metadata; parsers extract PDF, TXT, and DOCX text deterministically. FastAPI routes only handle HTTP input/output. Files are stored by UUID rather than raw filename, and extracted text is stored separately from metadata. This is deliberately reusable by planned RAG, OCR, vision, and agent tools.
+Documents flow through `DocumentService` and deterministic PDF, DOCX, and TXT
+parsers. RAG chunks document text, embeds it through local Ollama, and searches
+L2-normalized FAISS `IndexFlatIP` vectors (cosine similarity for non-zero rows).
 
-## Target architecture — planned
+Phase 3 model selection is `TaskClassifier -> ModelRouter -> ModelManager ->
+OllamaService`, restricted to registered roles and localhost-only configuration.
+
+Phase 5 adds a bounded local agent:
 
 ```text
-Frontend → FastAPI → Task Router → Model Manager → Agent Engine → Tools
-                                                               ├─ Document processing
-                                                               ├─ Local RAG
-                                                               ├─ OCR and vision
-                                                               ├─ Python sandbox
-                                                               └─ Deliverable generation
+Goal -> AgentPlanner -> strict decision -> tool registry/schema -> ToolExecutor
+     -> untrusted observation -> AgentPlanner -> final answer or controlled stop
 ```
 
-## Model routing architecture — implemented in Phase 3
-
-```text
-Prompt → Task classifier → Model router → Model manager/registry → Ollama service → selected local model
-```
-
-The classifier uses high-confidence task patterns for coding, debugging, code explanation, document analysis, summarization, and general reasoning. Ambiguous requests deliberately use the general capability. The router maps task type to a capability; the manager selects only registered, enabled, locally available models and uses the general model as the coding fallback.
-
-## Principles
-
-- **Local-first:** inference is constrained to localhost in Phase 1.
-- **Model-agnostic:** `OLLAMA_MODEL` is configuration, not route logic.
-- **Modular:** routes, schemas, services, and core utilities are separated.
-- **Hardware-aware:** the initial development target is an RTX 3050 with 6 GB VRAM.
-- **Secure and fail-safe:** service failures return safe API errors; prompts/responses are not logged.
-- **Observable:** logs carry endpoint, model, duration, outcome, and error type.
-- **Content-safe:** document logs contain only IDs, type, size, duration, and character count—not extracted text.
+The controller enforces `AGENT_MAX_STEPS`, blocks repeated normalized calls,
+preserves backend-created source IDs, and emits safe audit metadata without
+logging prompts, documents, observations, answers, or chain-of-thought.

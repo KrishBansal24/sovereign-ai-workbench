@@ -1,3 +1,5 @@
+"""Automatic local-model routing endpoint for classified user tasks."""
+
 import logging
 import time
 
@@ -14,9 +16,24 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 logger = logging.getLogger(__name__)
 
 
-@router.post("/auto", response_model=AutoChatResponse, summary="Automatically route a task to a registered local model")
+@router.post(
+    "/auto",
+    response_model=AutoChatResponse,
+    summary="Automatically route a task to a registered local model",
+    description="Classifies the task and delegates only to approved local Ollama models.",
+)
 def auto_chat(request: AutoChatRequest) -> AutoChatResponse:
+    """Classify, route, and execute a request through local model services.
+
+    Args:
+        request: Validated message and optional registered model-role override.
+
+    Returns:
+        Local model output together with explainable routing metadata.
+    """
     started_at = time.perf_counter()
+    # SECURITY: ModelRouter accepts controlled registry IDs, never arbitrary
+    # model tags supplied by a client.
     classification = task_classifier.classify(request.message)
     try:
         model, routing = model_router.route(classification, request.model)
@@ -31,7 +48,13 @@ def auto_chat(request: AutoChatRequest) -> AutoChatResponse:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Local Ollama is unavailable.") from error
     except OllamaResponseError as error:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Local Ollama could not complete the request.") from error
-    logger.info("event=auto_chat_completed task_type=%s selected_model_id=%s selected_ollama_model=%s fallback_used=%s duration_ms=%.2f success=true",
-                routing.task_type, routing.selected_model_id, routing.selected_model, routing.fallback_used,
-                (time.perf_counter() - started_at) * 1000)
+    logger.info(
+        "event=auto_chat_completed task_type=%s selected_model_id=%s "
+        "selected_ollama_model=%s fallback_used=%s duration_ms=%.2f success=true",
+        routing.task_type,
+        routing.selected_model_id,
+        routing.selected_model,
+        routing.fallback_used,
+        (time.perf_counter() - started_at) * 1_000,
+    )
     return AutoChatResponse(response=response, routing=routing, processing="local")

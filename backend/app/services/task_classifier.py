@@ -1,4 +1,8 @@
-"""Hybrid, local-only task classifier: strong deterministic signals then safe general fallback."""
+"""Local task-family classifier used before registered model routing.
+
+High-confidence patterns select coding or reasoning roles; ambiguous input
+falls back to the general role instead of calling a cloud classifier.
+"""
 
 import re
 from dataclasses import dataclass
@@ -8,6 +12,7 @@ from app.schemas.models import TaskType
 
 @dataclass(frozen=True)
 class Classification:
+    """Typed classifier result consumed by ModelRouter."""
     task_type: TaskType
     confidence: float
     source: str
@@ -17,6 +22,14 @@ class TaskClassifier:
     """Scores task intent patterns; ambiguous work deliberately defaults to general reasoning."""
 
     def classify(self, message: str) -> Classification:
+        """Classify a user task using explainable deterministic signals.
+
+        Args:
+            message: Raw user request to assign to an approved task family.
+
+        Returns:
+            The selected task type, confidence estimate, and decision source.
+        """
         normalized = message.lower().strip()
         code_block = "```" in normalized or bool(re.search(r"\bdef\s+\w+\(|\bclass\s+\w+", normalized))
         coding_signals = sum(bool(re.search(pattern, normalized)) for pattern in (

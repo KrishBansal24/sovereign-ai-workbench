@@ -1,8 +1,13 @@
+"""Integration tests for validated local document upload and extraction routes."""
+
 from io import BytesIO
+from pathlib import Path
 
 from docx import Document
 from fastapi.testclient import TestClient
+from httpx import Response
 from pypdf import PdfWriter
+from pytest import MonkeyPatch
 
 from app.api.routes import documents as documents_route
 from app.main import app
@@ -12,13 +17,19 @@ from app.services.document_service import DocumentService
 client = TestClient(app)
 
 
-def use_temporary_store(monkeypatch, tmp_path, max_upload_size_mb=20):
+def use_temporary_store(
+    monkeypatch: MonkeyPatch,
+    tmp_path: Path,
+    max_upload_size_mb: int = 20,
+) -> DocumentService:
+    """Replace the route's production store with isolated test storage."""
     service = DocumentService(data_directory=tmp_path, max_upload_size_mb=max_upload_size_mb)
     monkeypatch.setattr(documents_route, "document_service", service)
     return service
 
 
-def upload(filename, content, content_type):
+def upload(filename: str, content: bytes, content_type: str) -> Response:
+    """Submit one multipart document upload through the real API route."""
     return client.post(
         "/api/documents/upload",
         files={"file": (filename, content, content_type)},
@@ -41,6 +52,7 @@ def test_upload_txt_and_retrieve_text(monkeypatch, tmp_path):
 
 def test_upload_valid_pdf_reports_ocr_requirement_when_no_text(monkeypatch, tmp_path):
     use_temporary_store(monkeypatch, tmp_path)
+    # A blank valid PDF exercises the scanned/text-poor extraction status.
     pdf = BytesIO()
     writer = PdfWriter()
     writer.add_blank_page(width=72, height=72)

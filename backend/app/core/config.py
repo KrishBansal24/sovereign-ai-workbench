@@ -1,4 +1,10 @@
-"""Central configuration for the local-only backend."""
+"""Configuration loading and local-only safety validation.
+
+This module converts environment variables and the optional backend `.env`
+file into one immutable Settings object used by routes and services. It keeps
+runtime/model configuration outside application logic and rejects remote
+Ollama endpoints to preserve the sovereign local-processing boundary.
+"""
 
 import os
 from dataclasses import dataclass
@@ -11,7 +17,11 @@ LOCAL_HOSTS = {"localhost", "127.0.0.1", "::1"}
 
 
 def load_env_file() -> None:
-    """Load simple KEY=VALUE entries without overwriting real environment variables."""
+    """Load simple `.env` values without replacing actual environment values.
+
+    Operating-system variables take precedence so deployments can override
+    local development defaults without changing a file.
+    """
     if not ENV_FILE.exists():
         return
 
@@ -24,7 +34,17 @@ def load_env_file() -> None:
 
 
 def require_local_ollama_url(base_url: str) -> str:
-    """Prevent accidental use of a cloud or remote inference endpoint."""
+    """Validate and normalize a loopback-only Ollama base URL.
+
+    Args:
+        base_url: Configured HTTP(S) endpoint for the Ollama runtime.
+
+    Returns:
+        URL without a trailing slash.
+
+    Raises:
+        ValueError: If the endpoint is not a supported localhost address.
+    """
     parsed = urlparse(base_url)
     if parsed.scheme not in {"http", "https"} or parsed.hostname not in LOCAL_HOSTS:
         raise ValueError("OLLAMA_BASE_URL must point to localhost, 127.0.0.1, or ::1.")
@@ -33,6 +53,11 @@ def require_local_ollama_url(base_url: str) -> str:
 
 @dataclass(frozen=True)
 class Settings:
+    """Immutable settings shared by local AI, documents, RAG, and logging.
+
+    Keeping these values together makes configuration discoverable and avoids
+    scattering model names, upload limits, and storage paths across services.
+    """
     ollama_base_url: str
     ollama_model: str
     ollama_timeout_seconds: float
@@ -45,9 +70,19 @@ class Settings:
     rag_chunk_size: int
     rag_chunk_overlap: int
     rag_top_k: int
+    rag_min_similarity: float
+    agent_max_steps: int
 
 
 def get_settings() -> Settings:
+    """Build validated application settings from environment-based configuration.
+
+    Returns:
+        A fully validated immutable settings instance.
+
+    Raises:
+        ValueError: If numeric limits, model names, or local URL policy fail.
+    """
     load_env_file()
     base_url = require_local_ollama_url(
         os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
@@ -59,6 +94,8 @@ def get_settings() -> Settings:
     rag_chunk_size = int(os.getenv("RAG_CHUNK_SIZE", "3000"))
     rag_chunk_overlap = int(os.getenv("RAG_CHUNK_OVERLAP", "400"))
     rag_top_k = int(os.getenv("RAG_TOP_K", "5"))
+    rag_min_similarity = float(os.getenv("RAG_MIN_SIMILARITY", "0.45"))
+    agent_max_steps = int(os.getenv("AGENT_MAX_STEPS", "6"))
     timeout_seconds = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
     max_upload_size_mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20"))
 
@@ -68,8 +105,11 @@ def get_settings() -> Settings:
         raise ValueError("OLLAMA_TIMEOUT_SECONDS must be greater than zero.")
     if max_upload_size_mb <= 0:
         raise ValueError("MAX_UPLOAD_SIZE_MB must be greater than zero.")
+    # Overlap must remain smaller than a chunk or chunking could stop advancing.
     if rag_chunk_size <= 0 or rag_chunk_overlap < 0 or rag_chunk_overlap >= rag_chunk_size or rag_top_k <= 0:
         raise ValueError("Invalid RAG chunking or retrieval configuration.")
+    if not -1 <= rag_min_similarity <= 1 or agent_max_steps <= 0:
+        raise ValueError("Invalid RAG relevance threshold or agent step limit.")
 
     return Settings(
         ollama_base_url=base_url,
@@ -84,6 +124,8 @@ def get_settings() -> Settings:
         rag_chunk_size=rag_chunk_size,
         rag_chunk_overlap=rag_chunk_overlap,
         rag_top_k=rag_top_k,
+        rag_min_similarity=rag_min_similarity,
+        agent_max_steps=agent_max_steps,
     )
 
 

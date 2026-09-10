@@ -1,1 +1,1 @@
-"""Application route modules."""
+"""FastAPI route modules grouped by application capability."""

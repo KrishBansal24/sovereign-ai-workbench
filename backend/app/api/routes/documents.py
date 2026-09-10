@@ -1,3 +1,5 @@
+"""Document HTTP routes delegating storage and extraction to ``DocumentService``."""
+
 import logging
 import time
 from typing import Annotated
@@ -32,8 +34,18 @@ logger = logging.getLogger(__name__)
     description="Stores a PDF, TXT, or DOCX file locally and extracts text without using an LLM.",
 )
 async def upload_document(file: Annotated[UploadFile, File(description="A PDF, TXT, or DOCX file")]) -> DocumentMetadata:
+    """Accept one supported document and delegate validation and extraction.
+
+    Args:
+        file: Multipart PDF, TXT, or DOCX upload supplied by the client.
+
+    Returns:
+        Sanitized document metadata created by ``DocumentService``.
+    """
     started_at = time.perf_counter()
     try:
+        # SECURITY: service-side validation controls file type, size, storage
+        # name, and parser selection; the route never derives a filesystem path.
         content = await file.read()
         metadata = document_service.upload(file.filename, content, file.content_type)
     except DocumentValidationError as error:
@@ -70,6 +82,7 @@ async def upload_document(file: Annotated[UploadFile, File(description="A PDF, T
     description="Returns metadata only, newest upload first.",
 )
 def list_documents() -> DocumentListResponse:
+    """List local document metadata by delegating to ``DocumentService``."""
     return DocumentListResponse(documents=document_service.list_documents())
 
 
@@ -79,6 +92,11 @@ def list_documents() -> DocumentListResponse:
     summary="Get document processing metadata",
 )
 def get_document(document_id: str) -> DocumentMetadata:
+    """Return metadata for one validated document ID.
+
+    Args:
+        document_id: Server-issued document UUID.
+    """
     return _get_metadata(document_id)
 
 
@@ -89,6 +107,14 @@ def get_document(document_id: str) -> DocumentMetadata:
     description="Development endpoint. Future access control can protect extracted content.",
 )
 def get_document_text(document_id: str) -> DocumentTextResponse:
+    """Return previously extracted text for a controlled document ID.
+
+    Args:
+        document_id: Server-issued document UUID.
+
+    Returns:
+        Document ID and extracted local text.
+    """
     try:
         text = document_service.get_text(document_id)
     except DocumentNotFoundError as error:
@@ -107,6 +133,14 @@ def get_document_text(document_id: str) -> DocumentTextResponse:
     summary="Delete a stored document and its extracted text",
 )
 def delete_document(document_id: str) -> DeleteDocumentResponse:
+    """Delete a stored document and ask the service to remove its RAG vectors.
+
+    Args:
+        document_id: Server-issued document UUID.
+
+    Returns:
+        Confirmation that controlled document artifacts were removed.
+    """
     try:
         document_service.delete(document_id)
     except DocumentNotFoundError as error:
@@ -121,6 +155,7 @@ def delete_document(document_id: str) -> DeleteDocumentResponse:
 
 
 def _get_metadata(document_id: str) -> DocumentMetadata:
+    """Delegate metadata lookup and map service errors to HTTP responses."""
     try:
         return document_service.get_metadata(document_id)
     except DocumentNotFoundError as error:
@@ -133,6 +168,7 @@ def _get_metadata(document_id: str) -> DocumentMetadata:
 
 
 def _log_failure(started_at: float, error_type: str) -> None:
+    """Log an upload failure category without retaining untrusted file content."""
     duration_ms = (time.perf_counter() - started_at) * 1_000
     logger.warning(
         "event=document_upload_failed endpoint=/api/documents/upload duration_ms=%.2f success=false error_type=%s",

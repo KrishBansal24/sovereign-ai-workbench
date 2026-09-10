@@ -1,3 +1,5 @@
+"""Basic local-chat endpoint delegating inference to ``OllamaService``."""
+
 import logging
 import time
 
@@ -25,6 +27,14 @@ logger = logging.getLogger(__name__)
     response_description="The local model response and selected configured model.",
 )
 def chat(request: ChatRequest) -> ChatResponse:
+    """Generate one response with the configured local Ollama model.
+
+    Args:
+        request: Validated local-chat message request.
+
+    Returns:
+        Local model output and the configured model identifier.
+    """
     started_at = time.perf_counter()
     logger.info("event=chat_request_received endpoint=/api/chat model=%s", settings.ollama_model)
     try:
@@ -62,6 +72,12 @@ def chat(request: ChatRequest) -> ChatResponse:
 
 
 def _log_failure(started_at: float, error_type: str) -> None:
+    """Record a sanitized chat failure without logging prompt content.
+
+    Args:
+        started_at: Monotonic request start time used for duration logging.
+        error_type: Stable internal category rather than raw error details.
+    """
     duration_ms = (time.perf_counter() - started_at) * 1_000
     logger.warning(
         "event=chat_request_failed endpoint=/api/chat model=%s duration_ms=%.2f success=false error_type=%s",

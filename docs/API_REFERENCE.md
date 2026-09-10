@@ -1,68 +1,23 @@
-# API Reference — Phase 1
+# API Reference
 
-Base URL: `http://127.0.0.1:8000`.
+Base URL: `http://127.0.0.1:8000`; live OpenAPI documentation is `/docs`.
 
-## `GET /api/health`
+- `GET /api/health` reports backend and local Ollama/model availability.
+- `POST /api/chat` accepts `{"message":"..."}` for the configured local model.
+- `POST /api/chat/auto` classifies work and routes it to a registered local
+  general or coding model.
+- `POST /api/documents/upload` accepts a PDF, TXT, or DOCX multipart `file`.
+- `GET /api/documents`, `GET /api/documents/{id}`, and
+  `GET /api/documents/{id}/text` expose controlled document metadata/text.
+- `POST /api/knowledge/documents/{id}/index` creates local RAG entries.
+- `POST /api/knowledge/search` accepts `{"query":"...","top_k":5}` and
+  returns source-traceable chunks with cosine-similarity scores.
+- `POST /api/knowledge/ask` accepts `{"question":"..."}` for a local,
+  context-grounded answer.
+- `GET /api/tools` lists the fixed controlled tool registry.
+- `POST /api/agent/run` accepts `{"goal":"..."}` and returns a bounded
+  planner/tool trace, backend-derived sources, and an optional stop reason.
 
-Purpose: diagnose backend, local Ollama, and configured-model availability. It returns HTTP 200 even if Ollama is unavailable because the FastAPI backend is still reachable.
-
-Example response:
-
-```json
-{"backend":"online","ollama":"available","model":"qwen3:8b","model_status":"available","mode":"local"}
-```
-
-`ollama` can be `unavailable`; `model_status` is then `unavailable` because it cannot be verified.
-
-## `POST /api/chat`
-
-Purpose: submit a message to the configured local Ollama model.
-
-Request:
-
-```json
-{"message":"Explain what a P&ID is."}
-```
-
-Successful response:
-
-```json
-{"response":"...","model":"qwen3:8b","processing":"local"}
-```
-
-An empty or missing message returns 422. Unavailable Ollama returns 503. A missing configured model returns 404. An invalid/unexpected local runtime response returns 502. Swagger at `/docs` supplies the live OpenAPI schema.
-
-## `POST /api/documents/upload`
-
-Purpose: upload one PDF, TXT, or DOCX document, store it locally under a generated identifier, and extract text without an LLM. Send multipart form-data with a `file` field. Maximum size is controlled by `MAX_UPLOAD_SIZE_MB` (20 MB by default).
-
-Example response:
-
-```json
-{"document_id":"uuid","filename":"inspection_report.pdf","file_type":"pdf","size_bytes":1234,"status":"processed","text_extracted":true,"character_count":900,"extraction_status":"extracted","page_count":3}
-```
-
-Invalid type, MIME mismatch, empty file, excessive size, corrupt file, or unreadable encrypted PDF returns 422. Text-poor PDFs are stored successfully with `extraction_status: "ocr_required"`; no OCR is attempted.
-
-## Document retrieval
-
-- `GET /api/documents` lists metadata newest first.
-- `GET /api/documents/{document_id}` returns one metadata record.
-- `GET /api/documents/{document_id}/text` returns extracted text for development/testing.
-- `DELETE /api/documents/{document_id}` deletes the stored file, extracted text, and metadata.
-
-An unknown or malformed document ID returns 404. Internal filesystem paths are never returned.
-
-## `GET /api/models`
-
-Lists application-registered local models with role, capabilities, enabled state, and current Ollama availability. It never accepts or reveals arbitrary filesystem model locations.
-
-## `POST /api/chat/auto`
-
-Classifies a task locally, routes it to a registered model, and returns a normal response plus explainable routing metadata.
-
-```json
-{"message":"Write a Python function that parses CSV data.","model":"coding"}
-```
-
-`model` is optional and may only be the registered IDs `general` or `coding`; unknown IDs return 400. If the preferred coding model is unavailable but general is available, the response records `fallback_used: true`. No cloud fallback exists.
+Agent tool names and arguments are not executable API input. They are selected
+by the local planner, then validated against the fixed registry and Pydantic
+tool schemas before `ToolExecutor` performs an explicit local operation.
