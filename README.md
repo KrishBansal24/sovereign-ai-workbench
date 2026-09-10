@@ -12,7 +12,9 @@ The workbench is intended to let industrial teams use AI without sending confide
 
 **Complete and verified — Phase 3: Multi-Model Support & Router.** Registered local general and coding roles are selected through an explainable local classifier and safe fallback.
 
-**Planned — Phases 4–10.** Local RAG, OCR, vision, agents, sandboxes, deliverable generation, a React workbench, and enterprise security controls are not implemented yet.
+**Complete and verified — Phase 4: Local Knowledge Base / RAG.** Selected Phase 2 documents can be indexed locally, searched semantically, and used to ground answers with backend-derived sources.
+
+**Planned — Phases 5–10.** OCR, vision, agents, sandboxes, deliverable generation, a React workbench, and enterprise security controls are not implemented yet.
 
 ## Current architecture
 

@@ -41,6 +41,10 @@ class Settings:
     data_directory: Path
     general_model: str
     coding_model: str
+    embedding_model: str
+    rag_chunk_size: int
+    rag_chunk_overlap: int
+    rag_top_k: int
 
 
 def get_settings() -> Settings:
@@ -51,15 +55,21 @@ def get_settings() -> Settings:
     model = os.getenv("OLLAMA_MODEL", "qwen3:8b").strip()
     general_model = os.getenv("GENERAL_MODEL", model).strip()
     coding_model = os.getenv("CODING_MODEL", "qwen2.5-coder:7b").strip()
+    embedding_model = os.getenv("EMBEDDING_MODEL", "nomic-embed-text").strip()
+    rag_chunk_size = int(os.getenv("RAG_CHUNK_SIZE", "3000"))
+    rag_chunk_overlap = int(os.getenv("RAG_CHUNK_OVERLAP", "400"))
+    rag_top_k = int(os.getenv("RAG_TOP_K", "5"))
     timeout_seconds = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
     max_upload_size_mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20"))
 
-    if not model or not general_model or not coding_model:
+    if not model or not general_model or not coding_model or not embedding_model:
         raise ValueError("Configured model names cannot be empty.")
     if timeout_seconds <= 0:
         raise ValueError("OLLAMA_TIMEOUT_SECONDS must be greater than zero.")
     if max_upload_size_mb <= 0:
         raise ValueError("MAX_UPLOAD_SIZE_MB must be greater than zero.")
+    if rag_chunk_size <= 0 or rag_chunk_overlap < 0 or rag_chunk_overlap >= rag_chunk_size or rag_top_k <= 0:
+        raise ValueError("Invalid RAG chunking or retrieval configuration.")
 
     return Settings(
         ollama_base_url=base_url,
@@ -70,6 +80,10 @@ def get_settings() -> Settings:
         data_directory=ENV_FILE.parent / "data",
         general_model=general_model,
         coding_model=coding_model,
+        embedding_model=embedding_model,
+        rag_chunk_size=rag_chunk_size,
+        rag_chunk_overlap=rag_chunk_overlap,
+        rag_top_k=rag_top_k,
     )
 
 

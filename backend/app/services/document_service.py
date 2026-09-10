@@ -115,6 +115,12 @@ class DocumentService:
             records = self._load_records()
             records.pop(document_id, None)
             self._save_records(records)
+            # Keep Phase 4's explicit knowledge base free of orphaned vectors.
+            try:
+                from app.services.vector_store_service import vector_store
+                vector_store.remove_document(document_id)
+            except Exception:
+                pass
         except OSError as error:
             raise DocumentStorageError("The document could not be deleted.") from error
 
