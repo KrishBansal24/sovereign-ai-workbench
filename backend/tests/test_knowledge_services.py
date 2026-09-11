@@ -3,12 +3,12 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from app.services.chunking_service import ChunkingService
-from app.services.vector_store_service import VectorStoreService
+from app.services.knowledge.chunking_service import ChunkingService
+from app.services.knowledge.vector_store_service import VectorStoreService
 
 
 def test_chunking_and_overlap(monkeypatch):
-    from app.services import chunking_service as module
+    from app.services.knowledge import chunking_service as module
     monkeypatch.setattr(
         module,
         "settings",

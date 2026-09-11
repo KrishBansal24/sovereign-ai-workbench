@@ -11,8 +11,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.config import settings
-from app.schemas.document import DocumentMetadata
-from app.services.parsers import docx_parser, pdf_parser, text_parser
+from app.schemas.document import DocumentMetadata, ExtractionConfirmation
+from app.services.jobs import job_progress_service
+from app.services.documents.parsers import docx_parser, pdf_parser, text_parser
+from app.services.multimodal.ocr_service import OCRProcessingError, OCRUnavailableError, ocr_service
+from app.services.multimodal.extraction_reliability_service import extraction_reliability_service
 
 
 class DocumentServiceError(Exception):
@@ -35,13 +38,16 @@ class DocumentStorageError(DocumentServiceError):
     """The local document store could not complete an operation."""
 
 
-ALLOWED_TYPES = {".pdf": "pdf", ".txt": "txt", ".docx": "docx"}
+ALLOWED_TYPES = {".pdf": "pdf", ".txt": "txt", ".docx": "docx", ".png": "png", ".jpg": "jpg", ".jpeg": "jpeg"}
 ALLOWED_MIME_TYPES = {
     "pdf": {"application/pdf", "application/x-pdf"},
     "txt": {"text/plain"},
     "docx": {
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     },
+    "png": {"image/png"},
+    "jpg": {"image/jpeg"},
+    "jpeg": {"image/jpeg"},
 }
 OCR_TEXT_THRESHOLD = 20
 
@@ -72,8 +78,10 @@ class DocumentService:
         self.metadata_file = self.documents_directory / "metadata.json"
         self._ensure_storage()
 
-    def upload(self, filename: str | None, content: bytes, content_type: str | None) -> DocumentMetadata:
+    def upload(self, filename: str | None, content: bytes, content_type: str | None, job_id: str | None = None) -> DocumentMetadata:
         """Validate, store, extract, and record one local document upload."""
+        job = job_progress_service.get(job_id) if job_id else job_progress_service.create("document_processing", "uploaded", "Document uploaded for local processing.")
+        job_progress_service.update(job.job_id, "running", "quality_check", "Checking document extraction requirements.", 10)
         file_type, extension = self._validate_upload(filename, content, content_type)
         # SECURITY: raw filenames never choose storage paths or overwrite files.
         document_id = str(uuid.uuid4())
@@ -82,10 +90,19 @@ class DocumentService:
 
         try:
             stored_file.write_bytes(content)
-            extracted_text, page_count = self._extract(file_type, content)
+            job_progress_service.update(job.job_id, "running", "ocr_processing", "Extracting text locally.", 40)
+            extracted_text, page_count, origin, reliability_status, extraction_warnings = self._extract(file_type, content)
             # Text-poor PDFs are retained but honestly marked for future OCR.
-            extraction_status = "extracted" if len(extracted_text.strip()) >= OCR_TEXT_THRESHOLD else "ocr_required"
+            has_meaningful_text = len(extracted_text.strip()) >= OCR_TEXT_THRESHOLD
+            # Running OCR is not itself success: blank/scanned pages remain
+            # honestly marked for OCR review when no usable text was detected.
+            extraction_status = (
+                "ocr_extracted"
+                if origin == "ocr" and has_meaningful_text
+                else ("extracted" if has_meaningful_text else "ocr_required")
+            )
             text_file = self.texts_directory / f"{document_id}.txt"
+            job_progress_service.update(job.job_id, "running", "verifying_extraction", "Evaluating extraction reliability.", 85)
             text_file.write_text(extracted_text, encoding="utf-8")
             metadata = DocumentMetadata(
                 document_id=document_id,
@@ -98,12 +115,21 @@ class DocumentService:
                 character_count=len(extracted_text),
                 extraction_status=extraction_status,
                 page_count=page_count,
+                extraction_method=origin,
+                reliability_status=reliability_status,
+                extraction_warnings=extraction_warnings,
+                extraction_disagreements=[item.model_dump() for item in getattr(reliability, "important_disagreements", [])] if 'reliability' in locals() and reliability else [],
+                job_id=job.job_id,
             )
             records = self._load_records()
             records[document_id] = metadata.model_dump(mode="json")
             self._save_records(records)
+            final_status = "waiting_for_user" if metadata.reliability_status == "user_confirmation_required" else "completed"
+            final_stage = "user_confirmation" if final_status == "waiting_for_user" else "completed"
+            job_progress_service.update(job.job_id, final_status, final_stage, "One technical value requires confirmation." if final_status == "waiting_for_user" else "Document processing completed.", 100, {"document_id": document_id})
             return metadata
-        except (OSError, docx_parser.DocxExtractionError, pdf_parser.PdfExtractionError) as error:
+        except (OSError, docx_parser.DocxExtractionError, pdf_parser.PdfExtractionError, OCRProcessingError, OCRUnavailableError) as error:
+            job_progress_service.update(job.job_id, "failed", "failed", "Document processing could not be completed.")
             self._remove_artifacts(document_id, stored_name)
             if isinstance(error, OSError):
                 raise DocumentStorageError("The document could not be stored locally.") from error
@@ -142,12 +168,31 @@ class DocumentService:
             self._save_records(records)
             # Keep Phase 4's explicit knowledge base free of orphaned vectors.
             try:
-                from app.services.vector_store_service import vector_store
+                from app.services.knowledge.vector_store_service import vector_store
                 vector_store.remove_document(document_id)
             except Exception:
                 pass
         except OSError as error:
             raise DocumentStorageError("The document could not be deleted.") from error
+
+    def confirm_extraction(self, document_id: str, confirmation: ExtractionConfirmation) -> DocumentMetadata:
+        """Store a validated user decision while retaining raw OCR/vision evidence."""
+        metadata = self._get_record(document_id)
+        match = next((item for item in metadata.extraction_disagreements if item.field_or_token == confirmation.field_or_token), None)
+        if match is None:
+            raise DocumentValidationError("The requested confirmation field is not pending.")
+        if confirmation.selected_source == "manual" and not (confirmation.manual_value or "").strip():
+            raise DocumentValidationError("A manual value is required when selected_source is manual.")
+        confirmed_value = confirmation.manual_value.strip() if confirmation.selected_source == "manual" else (match.ocr_value if confirmation.selected_source == "ocr" else match.vision_value)
+        provenance = {"field_or_token": match.field_or_token, "ocr_value": match.ocr_value, "vision_value": match.vision_value, "user_confirmed_value": confirmed_value, "verification_source": "user"}
+        remaining = [item for item in metadata.extraction_disagreements if item.field_or_token != match.field_or_token]
+        updated = metadata.model_copy(update={"extraction_disagreements": remaining, "confirmations": [*metadata.confirmations, provenance], "reliability_status": "accepted_with_warnings" if not remaining else "user_confirmation_required"})
+        records = self._load_records()
+        records[document_id] = updated.model_dump(mode="json")
+        self._save_records(records)
+        if updated.job_id and not remaining:
+            job_progress_service.update(updated.job_id, "completed", "completed", "Extraction confirmation completed.", 100)
+        return updated
 
     def _validate_upload(self, filename: str | None, content: bytes, content_type: str | None) -> tuple[str, str]:
         """Validate filename-derived type, size, MIME, and lightweight signatures."""
@@ -155,7 +200,7 @@ class DocumentService:
             raise DocumentValidationError("A filename is required.")
         extension = Path(filename).suffix.lower()
         if extension not in ALLOWED_TYPES:
-            raise DocumentValidationError("Only PDF, TXT, and DOCX files are supported.")
+            raise DocumentValidationError("Only PDF, TXT, DOCX, PNG, JPG, and JPEG files are supported.")
         if not content:
             raise DocumentValidationError("Empty files are not supported.")
         if len(content) > self.max_upload_bytes:
@@ -168,15 +213,41 @@ class DocumentService:
             raise DocumentValidationError("The uploaded file is not a valid PDF.")
         if file_type == "docx" and not content.startswith(b"PK"):
             raise DocumentValidationError("The uploaded file is not a valid DOCX package.")
+        if file_type == "png" and not content.startswith(b"\x89PNG\r\n\x1a\n"):
+            raise DocumentValidationError("The uploaded file is not a valid PNG.")
+        if file_type in {"jpg", "jpeg"} and not content.startswith(b"\xff\xd8\xff"):
+            raise DocumentValidationError("The uploaded file is not a valid JPEG.")
         return file_type, extension
 
-    def _extract(self, file_type: str, content: bytes) -> tuple[str, int | None]:
+    def _extract(self, file_type: str, content: bytes) -> tuple[str, int | None, str, str, list[str]]:
         """Dispatch validated content to exactly one deterministic parser."""
         if file_type == "pdf":
-            return pdf_parser.extract_text(content)
+            text, page_count = pdf_parser.extract_text(content)
+            if len(text.strip()) >= OCR_TEXT_THRESHOLD:
+                return text, page_count, "parser", "accepted", []
+            try:
+                result = ocr_service.pdf(content)
+                reliability = extraction_reliability_service.decide(result.quality) if result.quality else extraction_reliability_service.decide(ocr_service.image(b"").quality) # pragma: no cover
+                return result.text, page_count, result.extraction_method, reliability.status, reliability.issues + reliability.warnings
+            except (OCRUnavailableError, OCRProcessingError):
+                # Preserve Phase 2's usable upload path until Windows Tesseract
+                # and the optional local renderer are installed.
+                return text, page_count, "parser", "review_required", ["OCR is unavailable for this scanned PDF."]
         if file_type == "docx":
-            return docx_parser.extract_text(content), None
-        return text_parser.extract_text(content), None
+            return docx_parser.extract_text(content), None, "parser", "accepted", []
+        if file_type in {"png", "jpg", "jpeg"}:
+            result = ocr_service.image(content)
+            reliability = extraction_reliability_service.decide(result.quality) if result.quality else None
+            if reliability and not reliability.can_index:
+                try:
+                    from app.services.multimodal.vision_service import vision_service
+                    transcription = vision_service.transcribe_bytes(content)
+                    reliability = extraction_reliability_service.decide_with_vision(result.text, result.quality, transcription.text)
+                    return result.text, 1, "ocr_vision_agreement" if reliability.can_index else "ocr_vision_disagreement", reliability.status, reliability.issues + reliability.warnings
+                except Exception:
+                    pass
+            return result.text, 1, result.extraction_method, reliability.status if reliability else "review_required", (reliability.issues + reliability.warnings) if reliability else ["OCR quality could not be assessed."]
+        return text_parser.extract_text(content), None, "parser", "accepted", []
 
     def _ensure_storage(self) -> None:
         """Create controlled runtime directories and an empty metadata store."""

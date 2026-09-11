@@ -6,7 +6,7 @@ Phase 1 established a maintainable local LLM backend. It is implemented and manu
 
 ## Design
 
-`app/main.py` creates FastAPI and includes route modules. `api/routes/chat.py` validates and serves chat requests. `services/ollama_service.py` calls Ollama. `core/config.py` loads `.env`/environment configuration and limits the Ollama URL to loopback hosts. `core/logging_config.py` configures metadata-only logs.
+`app/main.py` creates FastAPI and includes route modules. `api/routes/chat.py` validates and serves chat requests. `services/llm/ollama_service.py` calls Ollama. `core/config.py` loads `.env`/environment configuration and limits the Ollama URL to loopback hosts. `core/logging_config.py` configures metadata-only logs.
 
 ## APIs and schemas
 

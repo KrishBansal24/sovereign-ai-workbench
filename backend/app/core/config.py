@@ -72,6 +72,11 @@ class Settings:
     rag_top_k: int
     rag_min_similarity: float
     agent_max_steps: int
+    vision_model: str
+    vision_timeout_seconds: float
+    ocr_max_pages: int
+    tesseract_cmd: str | None
+    ocr_max_attempts: int
 
 
 def get_settings() -> Settings:
@@ -96,10 +101,15 @@ def get_settings() -> Settings:
     rag_top_k = int(os.getenv("RAG_TOP_K", "5"))
     rag_min_similarity = float(os.getenv("RAG_MIN_SIMILARITY", "0.45"))
     agent_max_steps = int(os.getenv("AGENT_MAX_STEPS", "6"))
+    vision_model = os.getenv("VISION_MODEL", "llava:7b").strip()
+    vision_timeout_seconds = float(os.getenv("VISION_TIMEOUT_SECONDS", "120"))
+    ocr_max_pages = int(os.getenv("OCR_MAX_PAGES", "20"))
+    tesseract_cmd = os.getenv("TESSERACT_CMD", "").strip() or None
+    ocr_max_attempts = int(os.getenv("OCR_MAX_ATTEMPTS", "2"))
     timeout_seconds = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
     max_upload_size_mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20"))
 
-    if not model or not general_model or not coding_model or not embedding_model:
+    if not model or not general_model or not coding_model or not embedding_model or not vision_model:
         raise ValueError("Configured model names cannot be empty.")
     if timeout_seconds <= 0:
         raise ValueError("OLLAMA_TIMEOUT_SECONDS must be greater than zero.")
@@ -108,7 +118,7 @@ def get_settings() -> Settings:
     # Overlap must remain smaller than a chunk or chunking could stop advancing.
     if rag_chunk_size <= 0 or rag_chunk_overlap < 0 or rag_chunk_overlap >= rag_chunk_size or rag_top_k <= 0:
         raise ValueError("Invalid RAG chunking or retrieval configuration.")
-    if not -1 <= rag_min_similarity <= 1 or agent_max_steps <= 0:
+    if not -1 <= rag_min_similarity <= 1 or agent_max_steps <= 0 or vision_timeout_seconds <= 0 or ocr_max_pages <= 0 or not 1 <= ocr_max_attempts <= 3:
         raise ValueError("Invalid RAG relevance threshold or agent step limit.")
 
     return Settings(
@@ -126,6 +136,11 @@ def get_settings() -> Settings:
         rag_top_k=rag_top_k,
         rag_min_similarity=rag_min_similarity,
         agent_max_steps=agent_max_steps,
+        vision_model=vision_model,
+        vision_timeout_seconds=vision_timeout_seconds,
+        ocr_max_pages=ocr_max_pages,
+        tesseract_cmd=tesseract_cmd,
+        ocr_max_attempts=ocr_max_attempts,
     )
 
 

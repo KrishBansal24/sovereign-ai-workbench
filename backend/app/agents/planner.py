@@ -6,9 +6,9 @@ from typing import Sequence
 from pydantic import ValidationError
 
 from app.agents.schemas import AgentObservation, PlannerDecision
-from app.services.model_router import model_router
-from app.services.ollama_service import OllamaServiceError, ollama_service
-from app.services.task_classifier import Classification
+from app.services.llm.model_router import model_router
+from app.services.llm.ollama_service import OllamaServiceError, ollama_service
+from app.services.llm.task_classifier import Classification
 from app.tools.registry import ToolDefinition
 
 

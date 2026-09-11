@@ -85,6 +85,18 @@ class OllamaService:
         except (requests.HTTPError, KeyError, TypeError, ValueError) as error:
             raise OllamaResponseError("Local Ollama returned an invalid response.") from error
 
+    def vision_with_model(self, model: str, prompt: str, image_bytes: bytes) -> str:
+        """Ask a local vision-capable model about application-owned image bytes."""
+        import base64
+        try:
+            response = requests.post(f"{self.settings.ollama_base_url}/api/chat", json={"model": model, "messages": [{"role": "user", "content": prompt, "images": [base64.b64encode(image_bytes).decode("ascii")]}], "stream": False}, timeout=self.settings.vision_timeout_seconds)
+            response.raise_for_status()
+            return response.json()["message"]["content"]
+        except requests.RequestException as error:
+            raise OllamaUnavailableError("Local Ollama vision model is unavailable.") from error
+        except (KeyError, TypeError, ValueError) as error:
+            raise OllamaResponseError("Local vision model returned an invalid response.") from error
+
     def is_available(self) -> bool:
         """Return whether the configured local Ollama server responds.
 

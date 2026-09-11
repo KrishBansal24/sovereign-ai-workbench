@@ -11,13 +11,13 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
-from app.services.document_service import DocumentNotFoundError
-from app.services.embedding_service import EmbeddingError
-from app.services.knowledge_service import IndexingResult, RetrievedChunk, knowledge_service
-from app.services.model_router import model_router
-from app.services.ollama_service import OllamaUnavailableError, ollama_service
-from app.services.task_classifier import Classification
-from app.services.vector_store_service import vector_store
+from app.services.documents.document_service import DocumentNotFoundError
+from app.services.knowledge.embedding_service import EmbeddingError
+from app.services.knowledge.knowledge_service import IndexingResult, RetrievedChunk, knowledge_service
+from app.services.llm.model_router import model_router
+from app.services.llm.ollama_service import OllamaUnavailableError, ollama_service
+from app.services.llm.task_classifier import Classification
+from app.services.knowledge.vector_store_service import vector_store
 
 
 router = APIRouter(prefix="/api/knowledge", tags=["knowledge"])

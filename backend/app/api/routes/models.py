@@ -3,8 +3,8 @@
 from fastapi import APIRouter, HTTPException, status
 
 from app.schemas.models import ModelInfo
-from app.services.model_manager import RegisteredModel, UnknownModelError, model_manager
-from app.services.ollama_service import OllamaUnavailableError
+from app.services.llm.model_manager import RegisteredModel, UnknownModelError, model_manager
+from app.services.llm.ollama_service import OllamaUnavailableError
 
 
 router = APIRouter(prefix="/api/models", tags=["models"])

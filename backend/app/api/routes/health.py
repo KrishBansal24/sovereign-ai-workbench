@@ -5,7 +5,7 @@ import logging
 from fastapi import APIRouter
 
 from app.core.config import settings
-from app.services.ollama_service import ollama_service
+from app.services.llm.ollama_service import ollama_service
 
 
 router = APIRouter(prefix="/api", tags=["system"])

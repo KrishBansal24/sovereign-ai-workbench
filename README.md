@@ -1,108 +1,167 @@
-# Sovereign AI Workbench
+# Sovereign On-Premise Agentic AI Workbench
 
-Sovereign On-Premise Agentic AI Workbench using open-weight multimodal models for confidential industrial work. This SIH 2026 project is being developed for the Mangalore Refinery and Petrochemicals Limited (MRPL) context.
-
-The workbench is intended to let industrial teams use AI without sending confidential operational, engineering, or business information to external AI services. It is local-first: model inference runs on organization-controlled hardware through a local runtime.
+A local-first SIH 2026 workbench for confidential industrial documents and
+workflows. FastAPI coordinates local Ollama models, controlled document
+storage, RAG, bounded tools, OCR, and image analysis without requiring cloud
+AI services.
 
 ## Status
 
-**Implemented and verified — Phase 1: Foundation & Local LLM Backend.** The current backend provides a modular FastAPI application, local Ollama integration, health/model checks, a chat API, configuration, safe logging, and unit tests.
+| Phase | Status |
+| --- | --- |
+| 1 Foundation/local LLM | Verified |
+| 2 Document ingestion | Verified |
+| 3 Model routing | Complete |
+| 4 Local RAG | Verified |
+| 5 Agent/tools | Verified manually |
+| 6 OCR, vision, reliability | Implemented; awaiting final manual verification |
+| 7–10 | Not started |
 
-**Complete and verified — Phase 2: Document Ingestion & Processing.** The backend stores local PDF, TXT, and DOCX uploads under generated identifiers and extracts text deterministically. OCR, RAG, vision, and LLM document analysis remain unimplemented.
+## Architecture
 
-**Complete and verified — Phase 3: Multi-Model Support & Router.** Registered local general and coding roles are selected through an explainable local classifier and safe fallback.
-
-**Complete and verified — Phase 4: Local Knowledge Base / RAG.** Selected Phase 2 documents can be indexed locally, searched semantically, and used to ground answers with backend-derived sources.
-
-**Implemented — Phase 5: Controlled Agent Tools.** A bounded local agent can use only registered knowledge, document, and calculator tools; manual verification is pending.
-
-**Planned — Phases 5–10.** OCR, vision, agents, sandboxes, deliverable generation, a React workbench, and enterprise security controls are not implemented yet.
-
-## Current architecture
-
-```text
-API client → FastAPI → Ollama service → localhost Ollama → Qwen3 8B → RTX 3050
+```mermaid
+flowchart LR
+  UI["Temporary verification UI (/verify)"] --> API["FastAPI backend"]
+  API --> DOC[Documents]
+  API --> RAG[Knowledge/RAG]
+  API --> AGENT[Bounded agent]
+  DOC --> MM[OCR, reliability, vision]
+  RAG --> FAISS[Local FAISS]
+  AGENT --> TOOLS[Registered tools]
+  MM --> OLLAMA[Local Ollama]
+  RAG --> OLLAMA
+  AGENT --> OLLAMA
 ```
 
-Ollama is the local inference runtime, not the workbench itself. The configured model is environment-driven rather than embedded throughout the API.
+Services are grouped by domain under `backend/app/services`: `llm`,
+`documents`, `knowledge`, and `multimodal`. Routes are thin HTTP boundaries;
+schemas define contracts; `tools/` is the fixed execution allow-list.
 
-## Technology and development hardware
+## Documentation map
 
-- Python, FastAPI, Uvicorn, Requests, Pydantic
-- Ollama with `qwen3:8b` as the initial local model
-- Windows development machine with NVIDIA GeForce RTX 3050 (6 GB VRAM)
+| Need | Reference |
+| --- | --- |
+| Setup, models, and troubleshooting | [Development setup](docs/DEVELOPMENT_SETUP.md) |
+| HTTP routes and request shapes | [API reference](docs/API_REFERENCE.md) |
+| Components and data flow | [Architecture](docs/ARCHITECTURE.md) |
+| Where to change code | [Codebase guide](docs/CODEBASE_GUIDE.md) |
+| OCR, reliability, and confirmation | [Phase 6 record](docs/PHASE_6_IMPLEMENTATION.md) |
+| Status and planned work | [Development roadmap](docs/DEVELOPMENT_ROADMAP.md) |
+| Local-only security posture | [Security and sovereignty](docs/SECURITY_AND_SOVEREIGNTY.md) |
+| Historical milestones | [Phase 1](docs/PHASE_1_IMPLEMENTATION.md), [Phase 2](docs/PHASE_2_IMPLEMENTATION.md), [Phase 3](docs/PHASE_3_IMPLEMENTATION.md), [Phase 4](docs/PHASE_4_IMPLEMENTATION.md), [Phase 5](docs/PHASE_5_IMPLEMENTATION.md) |
 
-## Repository layout
+For current behavior, prefer this README, the API reference, architecture, and
+Phase 6 record. Earlier phase files are historical implementation records.
 
-```text
-backend/
-  app/                 FastAPI application, routes, schemas, services, and core utilities
-  tests/               Phase 1 automated tests
-  .env.example         Safe configuration template
-  requirements.txt     Phase 1 dependencies
-docs/                  Architecture, setup, API, roadmap, and security documentation
-outputs/               Runtime-generated outputs (not committed)
-```
-
-## Setup and run
-
-Prerequisites: Windows, Python, Ollama, and a locally installed model such as `qwen3:8b`.
+## Quick start (Windows)
 
 ```powershell
 cd backend
+python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item .env.example .env
 ollama pull qwen3:8b
-uvicorn main:app --reload
+ollama pull qwen2.5-coder:7b
+ollama pull nomic-embed-text
+ollama pull llava:7b
+uvicorn app.main:app --reload
 ```
 
-Open Swagger at `http://127.0.0.1:8000/docs` and OpenAPI at `http://127.0.0.1:8000/openapi.json`.
+Open the temporary developer verification UI at
+`http://127.0.0.1:8000/verify`; Swagger remains at `/docs`.
 
-The default `.env` values are local-only:
+## Models and configuration
 
-```env
-OLLAMA_BASE_URL=http://localhost:11434
-OLLAMA_MODEL=qwen3:8b
-```
+All model names are environment-driven. `.env.example` defines local defaults:
+`OLLAMA_MODEL`/`GENERAL_MODEL` (`qwen3:8b`), `CODING_MODEL`
+(`qwen2.5-coder:7b`), `EMBEDDING_MODEL` (`nomic-embed-text`), and
+`VISION_MODEL` (`llava:7b`). `OLLAMA_BASE_URL` is validated as a loopback URL.
+Other relevant settings are `OLLAMA_TIMEOUT_SECONDS`,
+`VISION_TIMEOUT_SECONDS`, `MAX_UPLOAD_SIZE_MB`, `RAG_CHUNK_SIZE`,
+`RAG_CHUNK_OVERLAP`, `RAG_TOP_K`, `RAG_MIN_SIMILARITY`, `AGENT_MAX_STEPS`,
+`OCR_MAX_PAGES`, `OCR_MAX_ATTEMPTS`, and optional `TESSERACT_CMD`.
 
-## Implemented API
+## Document, reliability, and RAG flow
 
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /api/health` | Backend, local Ollama, and configured-model status |
-| `POST /api/chat` | Send a message to the configured local model |
-| `POST /api/documents/upload` | Store and extract one local PDF, TXT, or DOCX file |
-| `GET /api/documents` | List document metadata |
-| `GET /api/documents/{document_id}` | Retrieve one document's metadata |
-| `GET /api/documents/{document_id}/text` | Retrieve extracted text for development/testing |
-| `DELETE /api/documents/{document_id}` | Delete the stored document, text, and metadata |
-| `GET /api/models` | List registered local models and availability |
-| `POST /api/chat/auto` | Automatically route a task to a registered local model |
+Supported uploads are PDF, TXT, DOCX, PNG, JPG, and JPEG. Searchable documents
+use deterministic parsers. Text-poor PDFs and images can use local Tesseract;
+image OCR may make one bounded preprocessed retry. Weak image extraction may
+use strict local vision transcription. Important OCR/vision conflicts are never
+silently repaired: isolated conflicts become `user_confirmation_required`,
+while broad unreadability becomes `reupload_required`.
 
-Example:
+Final states are `accepted`, `accepted_with_warnings`,
+`user_confirmation_required`, `review_required`, and `reupload_required`.
+Only the first two are indexable. Confirmation preserves OCR, vision, and
+user-confirmed candidates separately with `verification_source=user`.
 
-```powershell
-Invoke-RestMethod -Method Post -Uri http://127.0.0.1:8000/api/chat -ContentType 'application/json' -Body '{"message":"Explain what a P&ID is."}'
-```
+Accepted text is chunked, embedded locally, persisted in FAISS, retrieved by
+cosine similarity, and passed to a routed local model with backend-derived
+source metadata.
 
-## Tests
+## Agent and tools
 
-Run mocked unit tests; Ollama and Qwen3 are not required for them:
+The agent runs a bounded planner → validated decision → fixed tool registry →
+observation loop. It blocks repeated normalized calls and returns a safe trace,
+not chain-of-thought. Current tools are `knowledge_search`,
+`document_metadata`, `document_text`, and `calculator`.
+
+## Progress and verification UI
+
+`POST /api/documents/upload-job` returns a server-generated job immediately;
+the background document worker updates safe stage-first job records. Poll
+`GET /api/jobs/{job_id}`. Job states are `queued`, `running`,
+`waiting_for_user`, `completed`, and `failed`; they are in-memory and clear on
+backend restart. The `/verify` cards keep independent progress, response, and
+polling state. Upload uses real job polling; vision, indexing, RAG, and agent
+requests are currently synchronous and show indeterminate UI status.
+
+## Testing and demo
 
 ```powershell
 cd backend
-pytest
+.\venv\Scripts\python.exe -m pytest -q
 ```
 
-## Offline and security posture
+For a demo, upload the P-202 inspection image, confirm the extracted `72 °C`
+and vibration readings, index an accepted document, ask its bearing
+temperature, then run an agent goal. See `docs/PHASE_6_IMPLEMENTATION.md` and
+`docs/API_REFERENCE.md` for verification/API detail.
 
-Phase 1 rejects non-local Ollama URLs and uses no cloud AI API. Logs record operational metadata, not complete prompts or model responses. This is a foundation, not a full air-gap or enterprise security implementation; see [Security and Sovereignty](docs/SECURITY_AND_SOVEREIGNTY.md).
+## Reset local development data
 
-## Roadmap and limitations
+[`reset_dev_data.py`](reset_dev_data.py) is a **temporary development-only**
+utility for clearing generated documents, extracted text, metadata and
+confirmations, and local FAISS/vector artifacts before a clean verification
+run. It never runs as part of FastAPI and must not be used in production.
 
-The full phased plan is in [Development Roadmap](docs/DEVELOPMENT_ROADMAP.md). Current limitations include one configured model, no authentication, no OCR/vision/RAG, and no frontend. Scanned or image-only PDFs report `ocr_required`; Phase 2 does not perform OCR.
+Stop the backend, then run this from the repository root to preview exactly
+what would be removed:
 
-## SIH 2026
+```powershell
+.\backend\venv\Scripts\python.exe .\reset_dev_data.py --dry-run
+```
 
-This repository documents a phased, demonstrable implementation for the Smart India Hackathon 2026 problem context. It does not contain proprietary MRPL documents, credentials, model weights, or cloud inference dependencies.
+For interactive cleanup, omit `--dry-run`; the default answer is **No** and
+only `y` or `yes` continues:
+
+```powershell
+.\backend\venv\Scripts\python.exe .\reset_dev_data.py
+```
+
+`--yes` supports deliberate non-interactive local cleanup. All modes require
+repository-root execution, reject `APP_ENV=production`, and delete only inside
+the configured `backend/data` runtime root. The utility preserves source,
+tests, docs, Git data, `.env` files, virtual environments, models, and
+configuration. Job records are in memory, so restart the backend to clear them.
+
+## Security and limitations
+
+The system is designed for locally hosted models, embeddings, and storage;
+this is not yet a technically enforced air-gap or full Phase 8 security suite.
+Only fixed tools execute, uploads receive UUID storage names, jobs reveal no
+paths/content/secrets, and Ollama is restricted to loopback configuration.
+CPU vision can be slow; job records are not persistent; scanned-PDF vision
+fallback and job-based RAG/agent execution are not yet implemented. The
+temporary `/verify` page is not the Phase 9 React frontend.

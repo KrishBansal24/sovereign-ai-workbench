@@ -11,7 +11,7 @@ from pytest import MonkeyPatch
 
 from app.api.routes import documents as documents_route
 from app.main import app
-from app.services.document_service import DocumentService
+from app.services.documents.document_service import DocumentService
 
 
 client = TestClient(app)

@@ -5,7 +5,7 @@ from io import BytesIO
 from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 
-from app.services.parsers.text_parser import normalize_text
+from app.services.documents.parsers.text_parser import normalize_text
 
 
 class PdfExtractionError(Exception):
