@@ -3,7 +3,7 @@
 import requests
 
 from app.core.config import settings
-from app.services.ollama_service import OllamaUnavailableError
+from app.services.llm.ollama_service import OllamaUnavailableError
 
 
 class EmbeddingError(Exception):

@@ -6,8 +6,26 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
-FileType = Literal["pdf", "txt", "docx"]
-ExtractionStatus = Literal["extracted", "ocr_required"]
+FileType = Literal["pdf", "txt", "docx", "png", "jpg", "jpeg"]
+ExtractionStatus = Literal["extracted", "ocr_required", "ocr_extracted"]
+ReliabilityStatus = Literal["accepted", "accepted_with_warnings", "user_confirmation_required", "review_required", "reupload_required"]
+
+
+class ExtractionDisagreement(BaseModel):
+    """Unresolved technical field evidence retained for user confirmation."""
+
+    field_or_token: str = Field(description="Visible technical token or field label.")
+    ocr_value: str = Field(description="Raw OCR candidate; never silently replaced.")
+    vision_value: str = Field(description="Raw vision candidate; never silently replaced.")
+    severity: Literal["high"] = Field(default="high")
+
+
+class ExtractionConfirmation(BaseModel):
+    """Validated user choice for one server-recorded disagreement."""
+
+    field_or_token: str = Field(min_length=1)
+    selected_source: Literal["ocr", "vision", "manual"]
+    manual_value: str | None = Field(default=None, max_length=200)
 
 
 class DocumentMetadata(BaseModel):
@@ -23,6 +41,12 @@ class DocumentMetadata(BaseModel):
     character_count: int = Field(description="Number of extracted text characters.")
     extraction_status: ExtractionStatus = Field(description="Extraction outcome; OCR is deferred when required.")
     page_count: int | None = Field(default=None, description="PDF page count when available; never fabricated for other files.")
+    extraction_method: str = Field(default="parser", description="Backend-derived extraction provenance.")
+    reliability_status: ReliabilityStatus = Field(default="accepted", description="Final extraction reliability decision used by indexing policy.")
+    extraction_warnings: list[str] = Field(default_factory=list, description="Safe user-facing extraction warnings.")
+    extraction_disagreements: list[ExtractionDisagreement] = Field(default_factory=list, description="Unresolved OCR/vision evidence requiring confirmation.")
+    confirmations: list[dict[str, str]] = Field(default_factory=list, description="User confirmation provenance without changing raw OCR or vision evidence.")
+    job_id: str | None = Field(default=None, description="Optional server-generated processing-progress identifier.")
 
 
 class DocumentListResponse(BaseModel):

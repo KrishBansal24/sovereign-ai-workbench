@@ -1,8 +1,8 @@
 """Map classified work to controlled local model roles and explanations."""
 
 from app.schemas.models import RoutingMetadata
-from app.services.model_manager import ModelManager, RegisteredModel, model_manager
-from app.services.task_classifier import Classification
+from app.services.llm.model_manager import ModelManager, RegisteredModel, model_manager
+from app.services.llm.task_classifier import Classification
 
 
 TASK_MODEL_IDS = {

@@ -8,8 +8,8 @@ the currently implemented executable policy is the registry's ``enabled`` flag.
 
 from typing import Any
 
-from app.services.document_service import document_service
-from app.services.knowledge_service import knowledge_service
+from app.services.documents.document_service import document_service
+from app.services.knowledge.knowledge_service import knowledge_service
 from app.tools.registry import TOOLS
 from app.tools.schemas import (
     CalculatorInput,

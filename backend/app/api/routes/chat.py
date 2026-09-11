@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from app.core.config import settings
 from app.schemas.chat import ChatRequest, ChatResponse
-from app.services.ollama_service import (
+from app.services.llm.ollama_service import (
     OllamaModelNotFoundError,
     OllamaResponseError,
     OllamaUnavailableError,

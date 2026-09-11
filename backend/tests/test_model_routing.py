@@ -4,9 +4,9 @@ from fastapi.testclient import TestClient
 
 from app.api.routes import auto_chat as auto_chat_route
 from app.main import app
-from app.services.model_manager import ModelManager, RegisteredModel
-from app.services.model_router import ModelRouter
-from app.services.task_classifier import task_classifier
+from app.services.llm.model_manager import ModelManager, RegisteredModel
+from app.services.llm.model_router import ModelRouter
+from app.services.llm.task_classifier import task_classifier
 
 
 client = TestClient(app)

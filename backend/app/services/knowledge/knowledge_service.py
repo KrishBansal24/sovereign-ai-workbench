@@ -3,10 +3,10 @@
 from typing import TypedDict
 
 from app.core.config import settings
-from app.services.chunking_service import chunking_service
-from app.services.document_service import document_service
-from app.services.embedding_service import embedding_service
-from app.services.vector_store_service import ChunkMetadata, vector_store
+from app.services.knowledge.chunking_service import chunking_service
+from app.services.documents.document_service import document_service
+from app.services.knowledge.embedding_service import embedding_service
+from app.services.knowledge.vector_store_service import ChunkMetadata, vector_store
 
 
 class IndexingResult(TypedDict):
@@ -40,6 +40,10 @@ class KnowledgeService:
             ValueError: If extraction produced no indexable text.
         """
         document_metadata = document_service.get_metadata(document_id)
+        # SECURITY: documents explicitly marked as unreadable must not pollute
+        # the local vector store with untrusted gibberish or missing values.
+        if document_metadata.reliability_status not in {"accepted", "accepted_with_warnings"}:
+            raise ValueError("Document extraction quality is insufficient for reliable indexing.")
         document_text = document_service.get_text(document_id)
         chunks = chunking_service.chunk(document_id, document_text)
         if not chunks:

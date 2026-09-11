@@ -6,10 +6,10 @@ import time
 from fastapi import APIRouter, HTTPException, status
 
 from app.schemas.models import AutoChatRequest, AutoChatResponse
-from app.services.model_manager import DisabledModelError, NoModelAvailableError, UnknownModelError
-from app.services.model_router import model_router
-from app.services.ollama_service import OllamaResponseError, OllamaUnavailableError, ollama_service
-from app.services.task_classifier import task_classifier
+from app.services.llm.model_manager import DisabledModelError, NoModelAvailableError, UnknownModelError
+from app.services.llm.model_router import model_router
+from app.services.llm.ollama_service import OllamaResponseError, OllamaUnavailableError, ollama_service
+from app.services.llm.task_classifier import task_classifier
 
 
 router = APIRouter(prefix="/api/chat", tags=["chat"])

@@ -4,15 +4,16 @@ import logging
 import time
 from typing import Annotated
 
-from fastapi import APIRouter, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, File, HTTPException, UploadFile, status
 
 from app.schemas.document import (
     DeleteDocumentResponse,
     DocumentListResponse,
     DocumentMetadata,
     DocumentTextResponse,
+    ExtractionConfirmation,
 )
-from app.services.document_service import (
+from app.services.documents.document_service import (
     DocumentNotFoundError,
     DocumentProcessingError,
     DocumentServiceError,
@@ -20,6 +21,8 @@ from app.services.document_service import (
     DocumentValidationError,
     document_service,
 )
+from app.schemas.jobs import ProcessingJob
+from app.services.jobs import job_progress_service
 
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
@@ -73,6 +76,25 @@ async def upload_document(file: Annotated[UploadFile, File(description="A PDF, T
         metadata.character_count,
     )
     return metadata
+
+
+@router.post("/upload-job", response_model=ProcessingJob, status_code=status.HTTP_202_ACCEPTED, summary="Start background local document processing")
+async def upload_document_job(background_tasks: BackgroundTasks, file: Annotated[UploadFile, File(description="A supported local document or image")]) -> ProcessingJob:
+    """Return promptly while a threadpool background task processes one upload."""
+    content = await file.read()
+    filename, content_type = file.filename, file.content_type
+    await file.close()
+    job = job_progress_service.create("document_processing", "uploaded", "Document queued for local processing.")
+    background_tasks.add_task(_process_upload_job, job.job_id, filename, content, content_type)
+    return job
+
+
+def _process_upload_job(job_id: str, filename: str | None, content: bytes, content_type: str | None) -> None:
+    """Run blocking extraction outside the request and publish only safe state."""
+    try:
+        document_service.upload(filename, content, content_type, job_id=job_id)
+    except Exception:
+        job_progress_service.update(job_id, "failed", "failed", "Document processing could not be completed.")
 
 
 @router.get(
@@ -152,6 +174,17 @@ def delete_document(document_id: str) -> DeleteDocumentResponse:
         ) from error
     logger.info("event=document_deleted endpoint=/api/documents document_id=%s success=true", document_id)
     return DeleteDocumentResponse(document_id=document_id, deleted=True)
+
+
+@router.post("/{document_id}/confirm-extraction", response_model=DocumentMetadata, summary="Confirm isolated OCR and vision disagreements")
+def confirm_extraction(document_id: str, confirmation: ExtractionConfirmation) -> DocumentMetadata:
+    """Apply one validated user confirmation without overwriting raw evidence."""
+    try:
+        return document_service.confirm_extraction(document_id, confirmation)
+    except DocumentNotFoundError as error:
+        raise HTTPException(status_code=404, detail="Document not found.") from error
+    except DocumentValidationError as error:
+        raise HTTPException(status_code=422, detail=str(error)) from error
 
 
 def _get_metadata(document_id: str) -> DocumentMetadata:

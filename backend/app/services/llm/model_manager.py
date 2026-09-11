@@ -7,7 +7,7 @@ It queries the existing local Ollama service and applies configured fallback.
 from dataclasses import dataclass
 
 from app.core.config import settings
-from app.services.ollama_service import OllamaUnavailableError, ollama_service
+from app.services.llm.ollama_service import OllamaUnavailableError, ollama_service
 
 
 @dataclass(frozen=True)
@@ -57,6 +57,12 @@ class ModelManager:
                 capabilities=("coding", "debugging", "code_explanation", "refactoring"),
                 enabled=True, priority=1, fallback_model_id="general",
                 description="Local coding, debugging, and code-explanation model.",
+            ),
+            RegisteredModel(
+                id="vision", display_name="Local Vision Model", ollama_model=settings.vision_model,
+                capabilities=("vision", "image_analysis", "visual_question_answering"),
+                enabled=True, priority=1, fallback_model_id=None,
+                description="Configurable local image-analysis model.",
             ),
         )
 
