@@ -65,6 +65,11 @@ class OllamaService:
                     "model": model,
                     "messages": [{"role": "user", "content": message}],
                     "stream": False,
+                    # Qwen3 otherwise spends substantial time generating a
+                    # private reasoning trace. Product clients need concise,
+                    # user-facing results and must never receive chain of
+                    # thought, so disable model thinking at this boundary.
+                    "think": False,
                 },
                 timeout=self.settings.ollama_timeout_seconds,
             )
@@ -83,7 +88,26 @@ class OllamaService:
             data = response.json()
             return data["message"]["content"]
         except (requests.HTTPError, KeyError, TypeError, ValueError) as error:
-            raise OllamaResponseError("Local Ollama returned an invalid response.") from error
+            raise OllamaResponseError(f"Local Ollama returned an invalid response: {str(error)}") from error
+
+    def chat_json_with_model(self, model: str, message: str) -> str:
+        """Generate one JSON-mode response for a strict local control loop."""
+        try:
+            response = requests.post(
+                f"{self.settings.ollama_base_url}/api/chat",
+                json={"model": model, "messages": [{"role": "user", "content": message}], "stream": False, "think": False, "format": "json"},
+                timeout=self.settings.ollama_timeout_seconds,
+            )
+        except (requests.ConnectionError, requests.Timeout) as error:
+            raise OllamaUnavailableError("Local Ollama is unavailable.") from error
+        except requests.RequestException as error:
+            raise OllamaResponseError(f"Local Ollama request failed: {str(error)}") from error
+        try:
+            response.raise_for_status()
+            return response.json()["message"]["content"]
+        except (requests.HTTPError, KeyError, TypeError, ValueError) as error:
+            details = getattr(response, 'text', '') if isinstance(error, requests.HTTPError) else ''
+            raise OllamaResponseError(f"Local Ollama returned an invalid response: {str(error)} - {details}") from error
 
     def vision_with_model(self, model: str, prompt: str, image_bytes: bytes) -> str:
         """Ask a local vision-capable model about application-owned image bytes."""

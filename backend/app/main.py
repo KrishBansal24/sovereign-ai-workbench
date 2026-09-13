@@ -7,7 +7,7 @@ without turning the application entry point into a controller.
 
 from fastapi import FastAPI
 
-from app.api.routes import agent, auto_chat, chat, documents, health, jobs, knowledge, models, verify, vision
+from app.api.routes import agent, analysis, artifacts, auto_chat, chat, deliverables, documents, health, jobs, knowledge, models, sandbox, verify, vision
 from app.core.logging_config import configure_logging
 
 
@@ -42,3 +42,7 @@ app.include_router(agent.router)
 app.include_router(vision.router)
 app.include_router(jobs.router)
 app.include_router(verify.router)
+app.include_router(sandbox.router)
+app.include_router(artifacts.router)
+app.include_router(deliverables.router)
+app.include_router(analysis.router)

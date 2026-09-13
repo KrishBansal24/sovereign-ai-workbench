@@ -9,7 +9,9 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from app.tools.schemas import CalculatorInput, DocumentIdInput, KnowledgeSearchInput
+from app.tools.schemas import CalculatorInput, DataSourcesInput, DocumentIdInput, KnowledgeSearchInput, SandboxCodeInput
+from app.schemas.analysis import DataAnalysisRequest
+from app.schemas.deliverables import ChartSpec, DocumentSpec, TableSpec
 
 ToolPermission = Literal["READ_ONLY", "COMPUTE_ONLY"]
 
@@ -50,6 +52,12 @@ TOOLS: dict[str, ToolDefinition] = {
         "Read bounded extracted text.",
         DocumentIdInput,
     ),
+    "list_data_sources": ToolDefinition(
+        "list_data_sources",
+        "List Local Data Sources",
+        "List managed CSV and XLSX sources with their available columns.",
+        DataSourcesInput,
+    ),
     "calculator": ToolDefinition(
         "calculator",
         "Calculator",
@@ -57,6 +65,13 @@ TOOLS: dict[str, ToolDefinition] = {
         CalculatorInput,
         "COMPUTE_ONLY",
     ),
+    "python_sandbox": ToolDefinition("python_sandbox", "Safe Python Sandbox", "Run bounded Python; no shell or host paths.", SandboxCodeInput, "COMPUTE_ONLY"),
+    "data_analysis": ToolDefinition("data_analysis", "Analyze Local Data", "Analyze a managed CSV or XLSX artifact/document.", DataAnalysisRequest, "COMPUTE_ONLY"),
+    "create_chart": ToolDefinition("create_chart", "Create Local Chart", "Generate a validated chart from structured rows.", ChartSpec, "COMPUTE_ONLY"),
+    "create_spreadsheet": ToolDefinition("create_spreadsheet", "Create Spreadsheet", "Generate a validated XLSX from structured rows.", TableSpec, "COMPUTE_ONLY"),
+    "create_document": ToolDefinition("create_document", "Create Document", "Generate a validated DOCX report from structured content.", DocumentSpec, "COMPUTE_ONLY"),
+    "create_presentation": ToolDefinition("create_presentation", "Create Presentation", "Generate a validated PPTX summary from structured rows.", TableSpec, "COMPUTE_ONLY"),
+    "create_pdf": ToolDefinition("create_pdf", "Create PDF", "Generate a validated PDF summary from structured rows.", TableSpec, "COMPUTE_ONLY"),
 }
 
 

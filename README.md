@@ -1,167 +1,169 @@
-# Sovereign On-Premise Agentic AI Workbench
+# Sovereign AI Workbench
 
-A local-first SIH 2026 workbench for confidential industrial documents and
-workflows. FastAPI coordinates local Ollama models, controlled document
-storage, RAG, bounded tools, OCR, and image analysis without requiring cloud
-AI services.
+A self-hosted, local-first, agentic AI workbench for confidential industrial environments where sensitive documents, operational data, scanned records, engineering drawings, calculations, and internal knowledge must remain on-premise.
 
-## Status
+The Sovereign AI Workbench is explicitly designed for local-only and air-gapped deployments. By processing all logic and intelligence locally, the workbench guarantees absolute data sovereignty.
 
-| Phase | Status |
-| --- | --- |
-| 1 Foundation/local LLM | Verified |
-| 2 Document ingestion | Verified |
-| 3 Model routing | Complete |
-| 4 Local RAG | Verified |
-| 5 Agent/tools | Verified manually |
-| 6 OCR, vision, reliability | Implemented; awaiting final manual verification |
-| 7–10 | Not started |
+## Key Capabilities
+
+- **Local-First Architecture:** Complete offline operation with no external cloud AI providers.
+- **Multimodal Document Ingestion:** Natively parses PDF, DOCX, TXT, CSV, and Markdown. Treats uploaded Python source code strictly as inert, unexecuted text.
+- **OCR & Vision Reliability:** Assesses the quality of scanned documents using OCR and Vision fallback (`llava`), categorizing extractions into strict human-in-the-loop review states to prevent "garbage in, garbage out".
+- **Local Knowledge / RAG:** FAISS vector store powered by local embeddings (`nomic-embed-text`) providing grounded, cited answers and strict hallucination prevention (insufficient-evidence refusal).
+- **Deterministic Data Analysis:** Translates natural language into strict JSON intents and executes them deterministically in pandas, preventing LLM arithmetic hallucinations.
+- **Safe Python Sandbox:** Ephemeral, isolated subprocess execution for bounded code execution with strict timeouts.
+- **Agent Orchestration:** A bounded Plan-Act-Observe-Decide loop powered by local reasoning models (`qwen3`), constrained to an allowlist of backend-authoritative tools with prompt-injection resistance.
+- **Artifact Generation:** Generates offline deliverables (Charts, Excel Workbooks, Word Documents) directly from deterministic data or Agent insight.
+- **Professional Terminal UI (TUI):** A rich, keyboard-driven Textual console interface for operating the system securely from the terminal.
 
 ## Architecture
 
-```mermaid
-flowchart LR
-  UI["Temporary verification UI (/verify)"] --> API["FastAPI backend"]
-  API --> DOC[Documents]
-  API --> RAG[Knowledge/RAG]
-  API --> AGENT[Bounded agent]
-  DOC --> MM[OCR, reliability, vision]
-  RAG --> FAISS[Local FAISS]
-  AGENT --> TOOLS[Registered tools]
-  MM --> OLLAMA[Local Ollama]
-  RAG --> OLLAMA
-  AGENT --> OLLAMA
+The system uses a strict client-server separation where the FastAPI backend enforces all business rules, validation, and execution boundaries. The Terminal UI is a thin presentation layer.
+
+```text
+User
+ │
+ ▼
+Textual Terminal Workbench (TUI)
+ │
+ ▼
+FastAPI Backend (Authoritative Validation & Policy)
+ │
+ ├── Documents & Extractors
+ ├── Knowledge / RAG
+ ├── OCR / Vision
+ ├── Data Analysis
+ ├── Python Sandbox
+ ├── Agent Controller
+ ├── Artifact Service
+ └── Jobs & Progress
+ │
+ ▼
+Local Model Layer / Ollama Integration
+ │
+ ├── Reasoning (e.g. qwen3:8b)
+ ├── Coding (e.g. qwen2.5-coder:7b)
+ ├── Vision (e.g. llava:7b)
+ └── Embeddings (e.g. nomic-embed-text)
+ │
+ ▼
+Local Storage / FAISS Vector Index / Ephemeral Runtime Workspaces
 ```
 
-Services are grouped by domain under `backend/app/services`: `llm`,
-`documents`, `knowledge`, and `multimodal`. Routes are thin HTTP boundaries;
-schemas define contracts; `tools/` is the fixed execution allow-list.
+## Configured Models
 
-## Documentation map
+The backend is model-agnostic and relies on specific roles that can be configured via environment variables. The default roles are:
+- **Reasoning (`GENERAL_MODEL`):** `qwen3:8b`
+- **Coding (`CODING_MODEL`):** `qwen2.5-coder:7b`
+- **Vision (`VISION_MODEL`):** `llava:7b`
+- **Embeddings (`EMBEDDING_MODEL`):** `nomic-embed-text`
 
-| Need | Reference |
-| --- | --- |
-| Setup, models, and troubleshooting | [Development setup](docs/DEVELOPMENT_SETUP.md) |
-| HTTP routes and request shapes | [API reference](docs/API_REFERENCE.md) |
-| Components and data flow | [Architecture](docs/ARCHITECTURE.md) |
-| Where to change code | [Codebase guide](docs/CODEBASE_GUIDE.md) |
-| OCR, reliability, and confirmation | [Phase 6 record](docs/PHASE_6_IMPLEMENTATION.md) |
-| Status and planned work | [Development roadmap](docs/DEVELOPMENT_ROADMAP.md) |
-| Local-only security posture | [Security and sovereignty](docs/SECURITY_AND_SOVEREIGNTY.md) |
-| Historical milestones | [Phase 1](docs/PHASE_1_IMPLEMENTATION.md), [Phase 2](docs/PHASE_2_IMPLEMENTATION.md), [Phase 3](docs/PHASE_3_IMPLEMENTATION.md), [Phase 4](docs/PHASE_4_IMPLEMENTATION.md), [Phase 5](docs/PHASE_5_IMPLEMENTATION.md) |
+## Project Structure
 
-For current behavior, prefer this README, the API reference, architecture, and
-Phase 6 record. Earlier phase files are historical implementation records.
+```text
+sovereign-ai-workbench/
+├── backend/
+│   ├── app/                # FastAPI backend logic and domain services
+│   ├── tui/                # Textual Terminal UI presentation client
+│   └── tests/              # Comprehensive pytest suite
+├── docs/                   # Detailed project documentation (see Documentation Index)
+├── tools/                  # Developer utilities and verification scripts
+├── README.md               # This entry point
+└── .gitignore              # Source control exclusions
+```
 
-## Quick start (Windows)
+## Quick Start
 
+### 1. Prerequisites & Models
+Ensure Python 3.10+ and Ollama are installed. Pull the required models:
+```powershell
+ollama pull qwen3:8b
+ollama pull qwen2.5-coder:7b
+ollama pull llava:7b
+ollama pull nomic-embed-text
+```
+
+### 2. Install Dependencies
 ```powershell
 cd backend
 python -m venv venv
 .\venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 Copy-Item .env.example .env
-ollama pull qwen3:8b
-ollama pull qwen2.5-coder:7b
-ollama pull nomic-embed-text
-ollama pull llava:7b
-uvicorn app.main:app --reload
 ```
 
-Open the temporary developer verification UI at
-`http://127.0.0.1:8000/verify`; Swagger remains at `/docs`.
+### 3. Run Backend
+Start the local FastAPI server:
+```powershell
+uvicorn app.main:app --reload --reload-exclude "data/**"
+```
+*(Swagger UI is available at `http://127.0.0.1:8000/docs`)*
 
-## Models and configuration
-
-All model names are environment-driven. `.env.example` defines local defaults:
-`OLLAMA_MODEL`/`GENERAL_MODEL` (`qwen3:8b`), `CODING_MODEL`
-(`qwen2.5-coder:7b`), `EMBEDDING_MODEL` (`nomic-embed-text`), and
-`VISION_MODEL` (`llava:7b`). `OLLAMA_BASE_URL` is validated as a loopback URL.
-Other relevant settings are `OLLAMA_TIMEOUT_SECONDS`,
-`VISION_TIMEOUT_SECONDS`, `MAX_UPLOAD_SIZE_MB`, `RAG_CHUNK_SIZE`,
-`RAG_CHUNK_OVERLAP`, `RAG_TOP_K`, `RAG_MIN_SIMILARITY`, `AGENT_MAX_STEPS`,
-`OCR_MAX_PAGES`, `OCR_MAX_ATTEMPTS`, and optional `TESSERACT_CMD`.
-
-## Document, reliability, and RAG flow
-
-Supported uploads are PDF, TXT, DOCX, PNG, JPG, and JPEG. Searchable documents
-use deterministic parsers. Text-poor PDFs and images can use local Tesseract;
-image OCR may make one bounded preprocessed retry. Weak image extraction may
-use strict local vision transcription. Important OCR/vision conflicts are never
-silently repaired: isolated conflicts become `user_confirmation_required`,
-while broad unreadability becomes `reupload_required`.
-
-Final states are `accepted`, `accepted_with_warnings`,
-`user_confirmation_required`, `review_required`, and `reupload_required`.
-Only the first two are indexable. Confirmation preserves OCR, vision, and
-user-confirmed candidates separately with `verification_source=user`.
-
-Accepted text is chunked, embedded locally, persisted in FAISS, retrieved by
-cosine similarity, and passed to a routed local model with backend-derived
-source metadata.
-
-## Agent and tools
-
-The agent runs a bounded planner → validated decision → fixed tool registry →
-observation loop. It blocks repeated normalized calls and returns a safe trace,
-not chain-of-thought. Current tools are `knowledge_search`,
-`document_metadata`, `document_text`, and `calculator`.
-
-## Progress and verification UI
-
-`POST /api/documents/upload-job` returns a server-generated job immediately;
-the background document worker updates safe stage-first job records. Poll
-`GET /api/jobs/{job_id}`. Job states are `queued`, `running`,
-`waiting_for_user`, `completed`, and `failed`; they are in-memory and clear on
-backend restart. The `/verify` cards keep independent progress, response, and
-polling state. Upload uses real job polling; vision, indexing, RAG, and agent
-requests are currently synchronous and show indeterminate UI status.
-
-## Testing and demo
-
+### 4. Run Terminal Workbench
+In a new terminal window:
 ```powershell
 cd backend
-.\venv\Scripts\python.exe -m pytest -q
+.\venv\Scripts\Activate.ps1
+python -m tui
 ```
 
-For a demo, upload the P-202 inspection image, confirm the extracted `72 °C`
-and vibration readings, index an accepted document, ask its bearing
-temperature, then run an agent goal. See `docs/PHASE_6_IMPLEMENTATION.md` and
-`docs/API_REFERENCE.md` for verification/API detail.
-
-## Reset local development data
-
-[`reset_dev_data.py`](reset_dev_data.py) is a **temporary development-only**
-utility for clearing generated documents, extracted text, metadata and
-confirmations, and local FAISS/vector artifacts before a clean verification
-run. It never runs as part of FastAPI and must not be used in production.
-
-Stop the backend, then run this from the repository root to preview exactly
-what would be removed:
-
+### 5. Run Tests
+Verify the installation by running the test suite:
 ```powershell
-.\backend\venv\Scripts\python.exe .\reset_dev_data.py --dry-run
+cd backend
+.\venv\Scripts\Activate.ps1
+pytest
 ```
 
-For interactive cleanup, omit `--dry-run`; the default answer is **No** and
-only `y` or `yes` continues:
+## Demo Workflow
 
-```powershell
-.\backend\venv\Scripts\python.exe .\reset_dev_data.py
-```
+1. **Start** the local backend and the Terminal Workbench.
+2. **Upload** confidential P&IDs, operational manuals, and CSV datasets in the Documents tab.
+3. **Review** the OCR/Vision status for scans; manually approve `review_required` items.
+4. **Index** trusted documents to the Knowledge base.
+5. **Analyze** the operational CSV data using natural language in the Data tab.
+6. **Ask the Agent** to investigate anomalies in the data, cross-reference the manual, and create a comparison chart and maintenance report.
+7. **Save** the generated artifacts to your local disk for offline distribution.
 
-`--yes` supports deliberate non-interactive local cleanup. All modes require
-repository-root execution, reject `APP_ENV=production`, and delete only inside
-the configured `backend/data` runtime root. The utility preserves source,
-tests, docs, Git data, `.env` files, virtual environments, models, and
-configuration. Job records are in memory, so restart the backend to clear them.
+## Security Model Summary
 
-## Security and limitations
+Sovereign AI operates under strict security boundaries:
+- **Local Inference:** No cloud provider required; no data leaves the network.
+- **Backend-Authoritative:** The TUI cannot dictate state. All inputs and tool calls are schema-validated.
+- **Restricted Execution:** The Python Sandbox executes in a strictly bounded, timed-out subprocess without arbitrary shell access.
+- **Gated Knowledge:** Unreliable or garbled OCR scans are prohibited from polluting the RAG index until reviewed by a human.
+- **Prompt Injection Boundaries:** The Agent selects tools from a hardcoded allowlist, and observations are sanitized to prevent data-driven prompt injections.
 
-The system is designed for locally hosted models, embeddings, and storage;
-this is not yet a technically enforced air-gap or full Phase 8 security suite.
-Only fixed tools execute, uploads receive UUID storage names, jobs reveal no
-paths/content/secrets, and Ollama is restricted to loopback configuration.
-CPU vision can be slow; job records are not persistent; scanned-PDF vision
-fallback and job-based RAG/agent execution are not yet implemented. The
-temporary `/verify` page is not the Phase 9 React frontend.
+For full technical details, see the [Security Model](docs/architecture/security_model.md).
+
+## Documentation Index
+
+**Project Context**
+- [Problem Statement](docs/project/problem_statement.md)
+- [Phase 7 Summary](docs/project/phase7_summary.md)
+- [Known Limitations](docs/project/limitations.md)
+
+**Architecture**
+- [Architecture Overview](docs/architecture/overview.md)
+- [Request Flows](docs/architecture/request_flows.md)
+- [Agent Architecture](docs/architecture/agent_architecture.md)
+- [Security Model](docs/architecture/security_model.md)
+
+**Features**
+- [Documents](docs/features/documents.md)
+- [Knowledge / RAG](docs/features/knowledge_rag.md)
+- [OCR / Vision](docs/features/ocr_vision.md)
+- [Data Analysis](docs/features/data_analysis.md)
+- [Python Sandbox](docs/features/sandbox.md)
+- [Agent Orchestration](docs/features/agent.md)
+- [Artifact Generation](docs/features/artifacts.md)
+- [Terminal UI (TUI)](docs/features/tui.md)
+
+**Development & Verification**
+- [Getting Started](docs/development/getting_started.md)
+- [Project Structure](docs/development/project_structure.md)
+- [Configuration](docs/development/configuration.md)
+- [Testing](docs/development/testing.md)
+- [Contributing](docs/development/contributing.md)
+- [Phase 7 Verification](docs/verification/phase7_verification.md)
+- [TUI End-to-End Verification](docs/verification/tui_end_to_end.md)

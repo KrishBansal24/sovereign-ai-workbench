@@ -77,6 +77,14 @@ class Settings:
     ocr_max_pages: int
     tesseract_cmd: str | None
     ocr_max_attempts: int
+    sandbox_timeout_seconds: float
+    sandbox_max_output_bytes: int
+    sandbox_max_file_bytes: int
+    sandbox_max_artifacts: int
+    sandbox_max_repair_attempts: int
+    pdf_max_pages: int
+    document_max_extracted_chars: int
+    image_max_pixels: int
 
 
 def get_settings() -> Settings:
@@ -106,6 +114,14 @@ def get_settings() -> Settings:
     ocr_max_pages = int(os.getenv("OCR_MAX_PAGES", "20"))
     tesseract_cmd = os.getenv("TESSERACT_CMD", "").strip() or None
     ocr_max_attempts = int(os.getenv("OCR_MAX_ATTEMPTS", "2"))
+    sandbox_timeout_seconds = float(os.getenv("SANDBOX_TIMEOUT_SECONDS", "10"))
+    sandbox_max_output_bytes = int(os.getenv("SANDBOX_MAX_OUTPUT_BYTES", "20000"))
+    sandbox_max_file_bytes = int(os.getenv("SANDBOX_MAX_FILE_BYTES", "5000000"))
+    sandbox_max_artifacts = int(os.getenv("SANDBOX_MAX_ARTIFACTS", "10"))
+    sandbox_max_repair_attempts = int(os.getenv("SANDBOX_MAX_REPAIR_ATTEMPTS", "2"))
+    pdf_max_pages = int(os.getenv("PDF_MAX_PAGES", "500"))
+    document_max_extracted_chars = int(os.getenv("DOCUMENT_MAX_EXTRACTED_CHARS", "5000000"))
+    image_max_pixels = int(os.getenv("IMAGE_MAX_PIXELS", "40000000"))
     timeout_seconds = float(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
     max_upload_size_mb = int(os.getenv("MAX_UPLOAD_SIZE_MB", "20"))
 
@@ -120,6 +136,8 @@ def get_settings() -> Settings:
         raise ValueError("Invalid RAG chunking or retrieval configuration.")
     if not -1 <= rag_min_similarity <= 1 or agent_max_steps <= 0 or vision_timeout_seconds <= 0 or ocr_max_pages <= 0 or not 1 <= ocr_max_attempts <= 3:
         raise ValueError("Invalid RAG relevance threshold or agent step limit.")
+    if sandbox_timeout_seconds <= 0 or sandbox_max_output_bytes <= 0 or sandbox_max_file_bytes <= 0 or sandbox_max_artifacts <= 0 or not 0 <= sandbox_max_repair_attempts <= 5 or pdf_max_pages <= 0 or document_max_extracted_chars <= 0 or image_max_pixels <= 0:
+        raise ValueError("Invalid sandbox execution limits.")
 
     return Settings(
         ollama_base_url=base_url,
@@ -141,6 +159,14 @@ def get_settings() -> Settings:
         ocr_max_pages=ocr_max_pages,
         tesseract_cmd=tesseract_cmd,
         ocr_max_attempts=ocr_max_attempts,
+        sandbox_timeout_seconds=sandbox_timeout_seconds,
+        sandbox_max_output_bytes=sandbox_max_output_bytes,
+        sandbox_max_file_bytes=sandbox_max_file_bytes,
+        sandbox_max_artifacts=sandbox_max_artifacts,
+        sandbox_max_repair_attempts=sandbox_max_repair_attempts,
+        pdf_max_pages=pdf_max_pages,
+        document_max_extracted_chars=document_max_extracted_chars,
+        image_max_pixels=image_max_pixels,
     )
 
 

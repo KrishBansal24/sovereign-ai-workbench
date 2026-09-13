@@ -53,10 +53,11 @@ class OCRQualityService:
 
     def preprocess(self, content: bytes) -> bytes:
         """Create an in-memory grayscale, contrast-enhanced, enlarged derivative."""
-        from PIL import Image, ImageEnhance, ImageOps
+        from PIL import Image, ImageEnhance, ImageFilter, ImageOps
         image = Image.open(BytesIO(content))
         image = ImageOps.exif_transpose(image).convert("L")
         image = ImageEnhance.Contrast(image).enhance(1.8)
+        image = image.filter(ImageFilter.SHARPEN)
         if max(image.size) < 1600: image = image.resize((image.width * 2, image.height * 2))
         output = BytesIO(); image.save(output, format="PNG")
         return output.getvalue()

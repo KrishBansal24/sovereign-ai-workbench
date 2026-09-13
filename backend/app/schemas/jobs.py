@@ -20,3 +20,6 @@ class ProcessingJob(BaseModel):
     created_at: datetime
     updated_at: datetime
     result: dict[str, str] | None = Field(default=None, description="Safe completion identifiers only; never document content or paths.")
+    display_name: str | None = Field(default=None, description="Friendly task label for product interfaces; never an ID or path.")
+    resource_name: str | None = Field(default=None, description="Safe related filename or generated-file label.")
+    resource_type: str | None = Field(default=None, description="Safe related resource category such as document or artifact.")

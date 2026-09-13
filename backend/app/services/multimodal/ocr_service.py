@@ -44,13 +44,16 @@ class OCRService:
         """Extract text from validated image bytes through local Tesseract."""
         started_at = time.perf_counter()
         try:
-            from PIL import Image
+            from PIL import Image, ImageOps
             import pytesseract
             # SECURITY: the executable location comes from trusted local
             # settings, never an API request or uploaded document metadata.
             if settings.tesseract_cmd:
                 pytesseract.pytesseract.tesseract_cmd = settings.tesseract_cmd
             image = Image.open(BytesIO(content))
+            image = ImageOps.exif_transpose(image)
+            if image.width * image.height > settings.image_max_pixels:
+                raise OCRProcessingError("The image is too large to process safely.")
             text = pytesseract.image_to_string(image)
         except ImportError as error:
             raise OCRUnavailableError("Local OCR dependencies are unavailable.") from error
@@ -65,15 +68,18 @@ class OCRService:
                 best_text, quality, method = retry_text, retry_quality, "ocr_preprocessed"
         return OCRResult(text=best_text, pages=[OCRPage(page_number=1, text=best_text)], processing_time_ms=(time.perf_counter() - started_at) * 1_000, warnings=quality.reasons, extraction_method=method, quality=quality)
 
-    def pdf(self, content: bytes) -> OCRResult:
+    def pdf(self, content: bytes, page_numbers: list[int] | None = None) -> OCRResult:
         """Render validated PDF pages locally and OCR them without cloud services."""
         started_at = time.perf_counter()
         try:
             import fitz
             document = fitz.open(stream=content, filetype="pdf")
-            if len(document) > settings.ocr_max_pages:
-                raise OCRProcessingError("The PDF exceeds the configured OCR page limit.")
-            pages = [OCRPage(page_number=index + 1, text=self.image(page.get_pixmap(matrix=fitz.Matrix(2, 2)).tobytes("png")).text) for index, page in enumerate(document)]
+            requested = page_numbers or list(range(1, len(document) + 1))
+            if len(requested) > settings.ocr_max_pages:
+                raise OCRProcessingError("The PDF has more OCR-required pages than the configured safety limit.")
+            if any(number < 1 or number > len(document) for number in requested):
+                raise OCRProcessingError("Requested PDF page is unavailable.")
+            pages = [OCRPage(page_number=number, text=self.image(document[number - 1].get_pixmap(matrix=fitz.Matrix(2, 2)).tobytes("png")).text) for number in requested]
         except OCRProcessingError:
             raise
         except ImportError as error:

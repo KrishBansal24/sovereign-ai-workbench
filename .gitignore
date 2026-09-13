@@ -59,3 +59,7 @@ Desktop.ini
 *.swp
 *.swo
 *~
+
+backend/data/
+backend/outputs/
+backend/pytest_output.txt

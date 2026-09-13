@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from app.schemas.document import DocumentMetadata, ExtractionConfirmation, ExtractionDisagreement
 from app.schemas.jobs import ProcessingJob
+from app.schemas.enums import DocumentReliabilityStatus
 from app.services.documents.document_service import DocumentService
 from app.services.jobs import JobProgressService
 from app.services.multimodal.extraction_reliability_service import extraction_reliability_service
@@ -27,10 +28,10 @@ def test_confirmation_preserves_raw_evidence_and_unblocks_document(tmp_path) -> 
     """A valid OCR selection keeps both candidates and records user provenance."""
     service = DocumentService(data_directory=tmp_path)
     document_id = str(uuid4())
-    metadata = DocumentMetadata(document_id=document_id, filename="report.png", file_type="png", size_bytes=1, uploaded_at=datetime.now(UTC), status="processed", text_extracted=True, character_count=10, extraction_status="ocr_extracted", reliability_status="user_confirmation_required", extraction_disagreements=[ExtractionDisagreement(field_or_token="technical_measurement", ocr_value="72 C", vision_value="12 C")])
+    metadata = DocumentMetadata(document_id=document_id, filename="report.png", file_type="png", size_bytes=1, uploaded_at=datetime.now(UTC), status="processed", text_extracted=True, character_count=10, extraction_status="ocr_extracted", reliability_status=DocumentReliabilityStatus.USER_CONFIRMATION_REQUIRED, extraction_disagreements=[ExtractionDisagreement(field_or_token="technical_measurement", ocr_value="72 C", vision_value="12 C")])
     service._save_records({document_id: metadata.model_dump(mode="json")})
     updated = service.confirm_extraction(document_id, ExtractionConfirmation(field_or_token="technical_measurement", selected_source="ocr"))
-    assert updated.reliability_status == "accepted_with_warnings"
+    assert updated.reliability_status == DocumentReliabilityStatus.ACCEPTED_WITH_WARNINGS
     assert updated.confirmations[0]["user_confirmed_value"] == "72 C"
     assert updated.confirmations[0]["vision_value"] == "12 C"
 

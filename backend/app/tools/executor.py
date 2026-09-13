@@ -10,13 +10,20 @@ from typing import Any
 
 from app.services.documents.document_service import document_service
 from app.services.knowledge.knowledge_service import knowledge_service
+from app.services.sandbox_service import sandbox_service
+from app.services.data_analysis_service import data_analysis_service
+from app.services.deliverable_service import deliverable_service
 from app.tools.registry import TOOLS
 from app.tools.schemas import (
     CalculatorInput,
+    DataSourcesInput,
     DocumentIdInput,
     KnowledgeSearchInput,
     ToolResult,
+    SandboxCodeInput,
 )
+from app.schemas.analysis import DataAnalysisRequest
+from app.schemas.deliverables import ChartSpec, DocumentSpec, TableSpec
 
 
 class ToolExecutor:
@@ -58,6 +65,17 @@ class ToolExecutor:
                 return self._read_document_metadata(validated_arguments)
             if tool_id == "document_text":
                 return self._read_document_text(validated_arguments)
+            if tool_id == "list_data_sources":
+                return self._list_data_sources(validated_arguments)
+            if tool_id == "python_sandbox":
+                return self._sandbox(validated_arguments)
+            if tool_id == "data_analysis":
+                return self._analyze(validated_arguments)
+            if tool_id == "create_chart": return self._artifact("create_chart", deliverable_service.create_chart(validated_arguments))
+            if tool_id == "create_spreadsheet": return self._artifact("create_spreadsheet", deliverable_service.create_spreadsheet(validated_arguments))
+            if tool_id == "create_document": return self._artifact("create_document", deliverable_service.create_document(validated_arguments))
+            if tool_id == "create_presentation": return self._artifact("create_presentation", deliverable_service.create_presentation(validated_arguments))
+            if tool_id == "create_pdf": return self._artifact("create_pdf", deliverable_service.create_pdf(validated_arguments))
             return self._calculate(validated_arguments)
         except Exception as error:
             return ToolResult(tool=tool_id, success=False, error=str(error))
@@ -121,6 +139,29 @@ class ToolExecutor:
         )
 
     @staticmethod
+    def _list_data_sources(arguments: DataSourcesInput) -> ToolResult:
+        """Enumerate application-managed structured inputs for the planner.
+
+        The returned records contain no filesystem paths. IDs remain an internal
+        tool-to-tool reference and are never rendered in the normal TUI.
+        """
+        del arguments
+        datasets = []
+        for metadata in document_service.list_documents():
+            if metadata.file_type not in {"csv", "xlsx"}:
+                continue
+            structured = metadata.structured_metadata if isinstance(metadata.structured_metadata, dict) else {}
+            columns = structured.get("columns", [])
+            datasets.append({
+                "source_kind": "document",
+                "source_id": metadata.document_id,
+                "filename": metadata.filename,
+                "file_type": metadata.file_type,
+                "columns": columns if isinstance(columns, list) else [],
+            })
+        return ToolResult(tool="list_data_sources", success=True, data={"datasets": datasets})
+
+    @staticmethod
     def _calculate(arguments: CalculatorInput) -> ToolResult:
         """Perform a fixed arithmetic operation without evaluating expressions.
 
@@ -152,6 +193,22 @@ class ToolExecutor:
         else:
             result = sum(values) / len(values)
         return ToolResult(tool="calculator", success=True, data={"result": result})
+
+    @staticmethod
+    def _sandbox(arguments: SandboxCodeInput) -> ToolResult:
+        result = sandbox_service.execute(arguments.code)
+        return ToolResult(tool="python_sandbox", success=result.status == "success", data={"execution_id": result.execution_id, "stdout": result.stdout, "artifacts": [item.model_dump() for item in result.artifacts], "job_id": result.job_id}, error=None if result.status == "success" else result.stderr)
+
+    @staticmethod
+    def _analyze(arguments: DataAnalysisRequest) -> ToolResult:
+        result = data_analysis_service.analyze(arguments)
+        data = result.model_dump(mode="json")
+        data["request"] = arguments.model_dump(mode="json")
+        return ToolResult(tool="data_analysis", success=True, data=data)
+
+    @staticmethod
+    def _artifact(tool: str, artifact: object) -> ToolResult:
+        return ToolResult(tool=tool, success=True, data={"artifact": artifact.model_dump(mode="json")})
 
 
 tool_executor = ToolExecutor()

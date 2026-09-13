@@ -1,0 +1,199 @@
+/* SOVEREIGN AI - Industrial Intelligence Workbench */
+/* Core Theme & Typography */
+Screen {
+    background: #090C10;
+    color: #D6E2ED;
+}
+
+#shell { height: 1fr; }
+#main { width: 1fr; height: 1fr; }
+
+/* Status Bar */
+#status-bar {
+    background: #090C10;
+    color: #8B9DAA;
+    padding: 1 2;
+    border-bottom: solid #30363D;
+    height: 3;
+    content-align: left middle;
+}
+
+.status-badge { color: #00D49D; text-style: bold; }
+.status-badge-offline { color: #F85149; text-style: bold; }
+.status-badge-muted { color: #8B9DAA; }
+
+/* Sidebar Navigation */
+#sidebar {
+    width: 26;
+    padding: 1 1;
+    background: #111822;
+    border-right: solid #30363D;
+}
+
+#brand {
+    color: #00D49D;
+    margin: 1 1 0 1;
+    text-style: bold;
+}
+#brand-subtitle {
+    color: #8B9DAA;
+    margin: 0 1 2 1;
+    text-style: italic;
+}
+
+.nav-section {
+    color: #8B9DAA;
+    text-style: bold;
+    margin: 1 0 0 1;
+}
+
+.nav {
+    width: 100%;
+    margin: 0;
+    padding: 0 1;
+    background: transparent;
+    border: none;
+    color: #D6E2ED;
+    text-align: left;
+    height: 1;
+}
+.nav:hover, .nav:focus {
+    background: #1F2E40;
+    color: #FFFFFF;
+}
+
+.nav-divider {
+    height: 1;
+    margin: 1 0;
+    border-top: solid #30363D;
+}
+
+/* Workspace */
+#workspace {
+    padding: 1 4 2 4;
+}
+
+.panel {
+    height: auto;
+    display: none;
+}
+
+.page-header {
+    color: #FFFFFF;
+    margin: 1 0 2 0;
+    text-style: bold;
+}
+
+/* Semantic Colors & Cards */
+.card {
+    background: #16202B;
+    border: solid #30363D;
+    padding: 1 2;
+    margin: 1 0;
+    height: auto;
+}
+
+.context, .settings-copy, .help-copy {
+    color: #8B9DAA;
+    margin: 1 0;
+    padding: 1 2;
+    background: #0D141C;
+    border-left: thick #30363D;
+}
+
+.result-panel {
+    margin: 1 0;
+    padding: 1 2;
+    background: #16202B;
+    border: solid #30363D;
+    color: #D6E2ED;
+    height: auto;
+}
+
+/* Action Area */
+.actions {
+    height: auto;
+    margin: 1 0;
+}
+
+/* Form Controls */
+Input, TextArea, Select, Checkbox {
+    margin: 1 0;
+}
+Input, TextArea {
+    border: solid #30363D;
+    background: #0D141C;
+    color: #E6EEF2;
+}
+Input:focus, TextArea:focus, Select:focus {
+    border: solid #0F7BB2;
+}
+TextArea { height: 7; }
+
+/* Buttons */
+Button {
+    margin-right: 1;
+    background: #21262D;
+    border: solid #363B42;
+    color: #C9D1D9;
+}
+Button:hover, Button:focus {
+    background: #30363D;
+    border: solid #8B9DAA;
+    color: #FFFFFF;
+}
+Button.-primary {
+    background: #238636;
+    border: solid #2EA043;
+    color: #FFFFFF;
+}
+Button.-primary:hover, Button.-primary:focus {
+    background: #2EA043;
+    border: solid #3FB950;
+}
+
+/* Specific Element Overrides */
+.review-card {
+    margin-top: 2;
+    padding: 1 2;
+    background: #2D2416;
+    border-left: thick #D29922;
+}
+
+/* Modals */
+.modal-card {
+    width: 76;
+    max-width: 94%;
+    height: auto;
+    max-height: 90%;
+    padding: 1 2;
+    background: #16202B;
+    border: solid #30363D;
+}
+
+ModalScreen {
+    align: center middle;
+    background: #000000 60%;
+}
+
+/* Command Palette (OptionList) */
+#command-palette-list {
+    margin: 1 0;
+    height: auto;
+    max-height: 15;
+    background: #0D141C;
+    border: solid #30363D;
+}
+
+/* Footer */
+Footer {
+    background: #090C10;
+    color: #8B9DAA;
+    border-top: solid #30363D;
+}
+
+/* Semantic Texts */
+.text-success { color: #3FB950; }
+.text-warning { color: #D29922; }
+.text-error { color: #F85149; }
+.text-muted { color: #8B9DAA; }

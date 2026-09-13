@@ -31,6 +31,10 @@ class DocumentIdInput(BaseModel):
     document_id: str = Field(description="Server-issued local document identifier.")
 
 
+class DataSourcesInput(BaseModel):
+    """No-argument request to enumerate managed structured-data sources."""
+
+
 class CalculatorInput(BaseModel):
     """Deterministic arithmetic request; expressions are never executed as Python."""
 
@@ -42,6 +46,11 @@ class CalculatorInput(BaseModel):
         max_length=50,
         description="Numeric operands; expressions and code are not accepted.",
     )
+
+
+class SandboxCodeInput(BaseModel):
+    """Bounded Python source only; shell flags and host paths are never inputs."""
+    code: str = Field(min_length=1, max_length=20_000)
 
 
 class ToolResult(BaseModel):

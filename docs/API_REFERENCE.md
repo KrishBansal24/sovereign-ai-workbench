@@ -30,3 +30,20 @@ Phase 9 production frontend and calls only the controlled APIs listed here.
 Agent tool names and arguments are not executable API input. They are selected
 by the local planner, then validated against the fixed registry and Pydantic
 tool schemas before `ToolExecutor` performs an explicit local operation.
+
+## Phase 7 APIs
+
+- `POST /api/sandbox/execute` accepts `{"code":"print(2 + 2)"}` and returns
+  bounded stdout/stderr, status, registered artifact IDs, and a job ID.
+- `POST /api/sandbox/generate` accepts a task, reuses the registered local
+  coding model, and makes at most the configured repair attempts.
+- `POST /api/analysis/run` accepts a managed document/artifact ID and local
+  filtering, grouping, or statistics request; host paths are never accepted.
+- `POST /api/deliverables/docx|xlsx|pptx|pdf|chart` accepts structured specs
+  and returns validated artifact metadata.
+- `GET /api/artifacts` lists safe metadata and
+  `GET /api/artifacts/{id}/download` resolves only a server-issued ID.
+
+Job responses may also include optional `display_name`, `resource_name`, and
+`resource_type` fields. These are safe, human-readable task labels for product
+clients; opaque job IDs remain internal routing values.

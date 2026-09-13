@@ -23,10 +23,10 @@ class JobProgressService:
         self._jobs: dict[str, ProcessingJob] = {}
         self._lock = RLock()
 
-    def create(self, operation: str, stage: str, message: str) -> ProcessingJob:
+    def create(self, operation: str, stage: str, message: str, *, display_name: str | None = None, resource_name: str | None = None, resource_type: str | None = None) -> ProcessingJob:
         """Create a queued job for a backend-defined operation."""
         now = datetime.now(UTC)
-        job = ProcessingJob(job_id=str(uuid4()), operation=operation, status="queued", stage=stage, message=message, created_at=now, updated_at=now)
+        job = ProcessingJob(job_id=str(uuid4()), operation=operation, status="queued", stage=stage, message=message, created_at=now, updated_at=now, display_name=display_name, resource_name=resource_name, resource_type=resource_type)
         with self._lock:
             self._jobs[job.job_id] = job
         return job
@@ -48,6 +48,11 @@ class JobProgressService:
             if job is None:
                 raise JobNotFoundError("Job not found.")
             return job
+
+    def list(self, limit: int = 50) -> list[ProcessingJob]:
+        """Return recent safe job metadata for user-facing progress views."""
+        with self._lock:
+            return sorted(self._jobs.values(), key=lambda job: job.updated_at, reverse=True)[:limit]
 
 
 job_progress_service = JobProgressService()

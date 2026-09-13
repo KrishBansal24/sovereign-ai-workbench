@@ -84,7 +84,11 @@ async def upload_document_job(background_tasks: BackgroundTasks, file: Annotated
     content = await file.read()
     filename, content_type = file.filename, file.content_type
     await file.close()
-    job = job_progress_service.create("document_processing", "uploaded", "Document queued for local processing.")
+    safe_name = (filename or "document").replace("\\", "/").rsplit("/", 1)[-1]
+    job = job_progress_service.create(
+        "document_processing", "uploaded", "Document queued for local processing.",
+        display_name=f"Upload — {safe_name}", resource_name=safe_name, resource_type="document",
+    )
     background_tasks.add_task(_process_upload_job, job.job_id, filename, content, content_type)
     return job
 
@@ -103,9 +107,13 @@ def _process_upload_job(job_id: str, filename: str | None, content: bytes, conte
     summary="List locally stored documents",
     description="Returns metadata only, newest upload first.",
 )
-def list_documents() -> DocumentListResponse:
+def list_documents(limit: int = 50, offset: int = 0) -> DocumentListResponse:
     """List local document metadata by delegating to ``DocumentService``."""
-    return DocumentListResponse(documents=document_service.list_documents())
+    all_documents = document_service.list_documents()
+    safe_limit = max(1, min(limit, 100))
+    safe_offset = max(0, offset)
+    page = all_documents[safe_offset:safe_offset + safe_limit]
+    return DocumentListResponse(documents=page, total=len(all_documents), limit=safe_limit, offset=safe_offset, has_more=safe_offset + len(page) < len(all_documents))
 
 
 @router.get(

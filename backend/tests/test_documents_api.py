@@ -1,5 +1,6 @@
 """Integration tests for validated local document upload and extraction routes."""
 
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 
@@ -48,6 +49,42 @@ def test_upload_txt_and_retrieve_text(monkeypatch, tmp_path):
     text_response = client.get(f"/api/documents/{metadata['document_id']}/text")
     assert text_response.status_code == 200
     assert "No leaks found." in text_response.json()["text"]
+
+
+def test_python_markdown_and_csv_are_inert_indexable_text_documents(monkeypatch, tmp_path):
+    use_temporary_store(monkeypatch, tmp_path)
+    marker = tmp_path / "must_not_exist"
+    python = f"# comment\nimport os\n\nclass Pump:\n    pass\n\ndef score(value):\n    \"\"\"Keep indentation.\"\"\"\n    return value\n# {marker}\n"
+    py = upload("anomaly_detector.py", python.encode(), "text/x-python")
+    assert py.status_code == 201 and py.json()["file_type"] == "py"
+    assert not marker.exists() and py.json()["structured_metadata"]["functions"] == ["score"]
+    assert "    return value" in client.get(f"/api/documents/{py.json()['document_id']}/text").json()["text"]
+    md = upload("maintenance.md", b"# Pump Maintenance\n\n## Vibration Limits\n\n```python\nnever_run()\n```", "text/markdown")
+    assert md.status_code == 201 and md.json()["structured_metadata"]["section_count"] == 2
+    csv = upload("readings.csv", b"equipment_id,vibration,note\nP-101,4.2,\"quoted, note\"\n", "text/csv")
+    assert csv.status_code == 201 and csv.json()["structured_metadata"]["row_count"] == 1
+    assert "P-101 | 4.2 | quoted, note" in client.get(f"/api/documents/{csv.json()['document_id']}/text").json()["text"]
+
+
+def test_csv_accepts_the_common_windows_excel_mime_type(monkeypatch, tmp_path) -> None:
+    """The TUI client's standard multipart MIME type remains a valid CSV."""
+    use_temporary_store(monkeypatch, tmp_path)
+    response = upload("readings.csv", b"asset,vibration\nP-101,4.2\n", "application/vnd.ms-excel")
+    assert response.status_code == 201
+    assert response.json()["file_type"] == "csv"
+
+
+def test_concurrent_document_uploads_preserve_every_metadata_record(tmp_path) -> None:
+    """Folder imports complete in parallel without colliding on metadata.json."""
+    service = DocumentService(data_directory=tmp_path, max_upload_size_mb=1)
+
+    def upload(number: int) -> str:
+        return service.upload(f"note-{number}.txt", f"local note {number}".encode(), "text/plain").document_id
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        document_ids = list(executor.map(upload, range(20)))
+
+    assert {item.document_id for item in service.list_documents()} == set(document_ids)
 
 
 def test_upload_valid_pdf_reports_ocr_requirement_when_no_text(monkeypatch, tmp_path):
@@ -122,3 +159,4 @@ def test_missing_and_corrupt_documents_fail_safely(monkeypatch, tmp_path):
         b"PKnot-a-docx",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     ).status_code == 422
+from app.services.documents.document_service import DocumentService
