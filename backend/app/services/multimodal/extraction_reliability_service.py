@@ -36,8 +36,10 @@ class ExtractionReliabilityResult(BaseModel):
 class ExtractionReliabilityService:
     """Apply conservative policy to untrusted OCR and vision transcription data."""
 
-    def compare(self, ocr_text: str, vision_text: str) -> list[ExtractionDisagreement]:
+    def compare(self, ocr_text: str, vision_text: str | None) -> list[ExtractionDisagreement]:
         """Compare IDs, numbers, and units without attempting to repair either value."""
+        if vision_text is None:
+            return []
         pattern = r"\b(?:[A-Za-z]+-\d+|\d+(?:\.\d+)?\s*(?:C|V|kW|mm/s|bar|%))\b"
         ocr_tokens = re.findall(pattern, ocr_text, flags=re.IGNORECASE)
         vision_tokens = re.findall(pattern, vision_text, flags=re.IGNORECASE)

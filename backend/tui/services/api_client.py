@@ -54,6 +54,7 @@ class APIClient:
             offset = next_offset
     async def indexed_documents(self) -> list[dict[str, Any]]: return (await self.request("GET", "/api/knowledge/documents"))["documents"]
     async def artifacts(self) -> list[dict[str, Any]]: return await self.request("GET", "/api/artifacts")
+    async def clear_artifacts(self) -> None: await self.request("DELETE", "/api/artifacts")
     async def job(self, job_id: str) -> dict[str, Any]: return await self.request("GET", f"/api/jobs/{job_id}")
     async def jobs(self) -> list[dict[str, Any]]: return await self.request("GET", "/api/jobs")
     async def upload(self, path: Path, background: bool = True) -> dict[str, Any]:

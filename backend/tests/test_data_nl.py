@@ -4,7 +4,9 @@ import asyncio
 from textual.widgets import TextArea, Select
 from tui.app import SovereignTUI
 
-class MockClient:
+from tui.services.api_client import APIClient
+
+class MockClient(APIClient):
     async def health(self): return {"backend": "online", "ollama": "available"}
     async def documents(self): return [{"document_id": "doc1", "filename": "test.csv", "file_type": "csv", "index_eligible": False, "structured_metadata": {"columns": ["asset", "vibration_mm_s_rms"]}}]
     async def artifacts(self): return []
@@ -21,7 +23,7 @@ class MockClient:
         self.analysis_responses = []
         self.analysis_args = []
         
-    async def chat(self, prompt, **kwargs):
+    async def chat(self, message: str, **kwargs):
         self.chat_calls += 1
         if self.chat_responses:
             return self.chat_responses.pop(0)

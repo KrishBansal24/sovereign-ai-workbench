@@ -6,13 +6,15 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+ArtifactType = Literal["sandbox", "analysis", "document", "spreadsheet", "presentation", "pdf", "chart"]
+
 class ArtifactMetadata(BaseModel):
     """Public artifact record that deliberately excludes its host path."""
 
     artifact_id: str
     filename: str
     media_type: str
-    artifact_type: Literal["sandbox", "analysis", "document", "spreadsheet", "presentation", "pdf", "chart"]
+    artifact_type: ArtifactType
     size_bytes: int
     created_at: datetime
     validation_status: Literal["validated", "invalid"]

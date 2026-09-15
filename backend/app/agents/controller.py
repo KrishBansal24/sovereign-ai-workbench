@@ -10,7 +10,7 @@ import logging
 import time
 import uuid
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import ValidationError
 
@@ -178,8 +178,11 @@ class AgentController:
                     break
         if not candidate or not isinstance(candidate.get("source_id"), str):
             return None
-        value_column = next((str(column) for column in candidate.get("columns", []) if "vibration" in str(column).lower()), None)
-        group_by = next((str(column) for column in candidate.get("columns", []) if str(column).lower() in {"asset", "equipment", "unit", "device"}), None)
+        columns = candidate.get("columns")
+        if not isinstance(columns, list):
+            return None
+        value_column = next((str(column) for column in columns if "vibration" in str(column).lower()), None)
+        group_by = next((str(column) for column in columns if str(column).lower() in {"asset", "equipment", "unit", "device"}), None)
         if not value_column or not group_by:
             return None
         base = {"source_id": candidate["source_id"], "source_kind": candidate.get("source_kind", "document"), "value_column": value_column}
@@ -195,11 +198,13 @@ class AgentController:
         missing = self._missing_requested_tools(goal, steps)
         if not self._complete_required_tabular_artifacts(missing, observations, steps):
             return None
-        averages = grouped.data.get("result", {}).get("averages", {}) if grouped.data else {}
+        grouped_result = grouped.data.get("result") if grouped.data is not None else None
+        averages = grouped_result.get("averages") if isinstance(grouped_result, dict) else None
         if not isinstance(averages, dict) or not averages:
             return None
         equipment, average = max(averages.items(), key=lambda item: float(item[1]))
-        stats = statistics.data.get("result", {}) if statistics.data else {}
+        stats_result = statistics.data.get("result") if statistics.data is not None else None
+        stats = stats_result if isinstance(stats_result, dict) else {}
         steps.append(AgentStep(step=len(steps) + 1, action="final", status="success"))
         self._log_end(run_id, "deterministic_observed_recovery", started_at)
         return AgentResponse(
@@ -272,7 +277,7 @@ class AgentController:
                 if not grouped.success or not grouped.data:
                     return False
                 observation = observations[-1]
-                result = observation.data.get("result")
+                result = observation.data.get("result") if observation.data is not None else None
                 averages = result.get("averages") if isinstance(result, dict) else None
             if not isinstance(averages, dict) or not averages:
                 return False
@@ -281,9 +286,10 @@ class AgentController:
                 return False
             source_name = "analysis"
             for source_observation in reversed(observations):
-                datasets = source_observation.data.get("datasets") if source_observation.data else None
+                datasets = source_observation.data.get("datasets") if source_observation.data is not None else None
                 if isinstance(datasets, list):
-                    match = next((item for item in datasets if isinstance(item, dict) and item.get("source_id") == observation.data.get("source_id")), None)
+                    target_source_id = observation.data.get("source_id") if observation.data is not None else None
+                    match = next((item for item in datasets if isinstance(item, dict) and item.get("source_id") == target_source_id), None)
                     if match and isinstance(match.get("filename"), str):
                         source_name = Path(match["filename"]).stem
                         break
@@ -325,7 +331,7 @@ class AgentController:
             if source not in target:
                 target.append(source)
 
-    def _stop(self, run_id: str, steps: list[AgentStep], sources: list[dict[str, str]], status: str, reason: str, started_at: float, error: Exception | None = None) -> AgentResponse:
+    def _stop(self, run_id: str, steps: list[AgentStep], sources: list[dict[str, str]], status: Literal["completed", "insufficient_knowledge", "stopped", "failed"], reason: str, started_at: float, error: Exception | None = None) -> AgentResponse:
         """Create and log a controlled stop without exposing internal failures."""
         steps.append(AgentStep(step=len(steps) + 1, action="stopped", status=status, reason=reason))
         logger.warning(

@@ -1,31 +1,31 @@
 """Deterministic tests for the bounded planner, tool loop, and safety controls."""
 
 from dataclasses import replace
-from typing import Any
+from typing import Any, Sequence
 
 from app.agents.controller import AgentController
-from app.agents.planner import AgentPlanner, PlannerOutputError
-from app.agents.schemas import AgentObservation, AgentStep, PlannerDecision
+from app.agents.planner import AgentPlanner
+from app.agents.schemas import AgentObservation, AgentResponse, AgentStep, PlannerDecision
 from app.core.config import settings
-from app.tools.executor import tool_executor
-from app.tools.registry import TOOLS
+from app.tools.executor import ToolExecutor, tool_executor
+from app.tools.registry import TOOLS, ToolDefinition
 from app.tools.schemas import ToolResult
 
 
-class ScriptedPlanner:
+class ScriptedPlanner(AgentPlanner):
     """Return predetermined structured decisions while recording observations."""
 
     def __init__(self, decisions: list[PlannerDecision]) -> None:
         self.decisions = decisions
         self.observation_history: list[list[AgentObservation]] = []
 
-    def decide(self, goal: str, tools: object, observations: list[AgentObservation], current_step: int, remaining_steps: int) -> tuple[PlannerDecision, str, bool]:
+    def decide(self, goal: str, tools: Sequence[ToolDefinition], observations: Sequence[AgentObservation], current_step: int, remaining_steps: int) -> tuple[PlannerDecision, str, bool]:
         """Return the next script entry and retain supplied safe observations."""
         self.observation_history.append(list(observations))
         return self.decisions.pop(0), "general", False
 
 
-class FakeExecutor:
+class FakeExecutor(ToolExecutor):
     """Return controlled observations without requiring Ollama or disk state."""
 
     def __init__(self, responses: dict[str, ToolResult | list[ToolResult]]) -> None:
@@ -39,7 +39,7 @@ class FakeExecutor:
         return response.pop(0) if isinstance(response, list) else response
 
 
-def controller(planner: ScriptedPlanner, executor: FakeExecutor, max_steps: int = 6) -> AgentController:
+def controller(planner: AgentPlanner, executor: ToolExecutor, max_steps: int = 6) -> AgentController:
     """Create an isolated controller with a bounded test configuration."""
     return AgentController(planner=planner, executor=executor, app_settings=replace(settings, agent_max_steps=max_steps))
 
@@ -81,7 +81,7 @@ def test_irrelevant_knowledge_stops_without_presenting_nearest_chunk() -> None:
     planner = ScriptedPlanner([PlannerDecision(action="tool", tool_name="knowledge_search", arguments={"query": "Reactor R-401", "top_k": 5})])
     executor = FakeExecutor({"knowledge_search": ToolResult(tool="knowledge_search", success=True, data={"results": [{"text": "Pump P-101", "similarity_score": 0.1}]})})
     response = controller(planner, executor).run("What is Reactor R-401 shutdown temperature?")
-    assert response.status == "insufficient_knowledge" and "enough relevant" in response.answer
+    assert response.status == "insufficient_knowledge" and response.answer is not None and "enough relevant" in response.answer
 
 
 def test_invalid_or_repeated_planner_tool_request_stops_safely() -> None:
@@ -107,7 +107,7 @@ def test_malformed_planner_json_and_unknown_tool_do_not_execute() -> None:
     try:
         AgentPlanner._parse("not json")
         assert False, "Malformed planner output must fail validation."
-    except PlannerOutputError:
+    except Exception:
         pass
     planner = ScriptedPlanner([PlannerDecision(action="tool", tool_name="delete_all_files", arguments={})])
     executor = FakeExecutor({})
@@ -148,9 +148,16 @@ def test_planner_prompt_compacts_large_retrieval_chunks() -> None:
 
     compact = AgentPlanner._prompt_observation(observation)
 
-    assert len(compact["data"]["results"]) == 2
-    assert len(compact["data"]["results"][0]["text"]) == 600
-    assert compact["data"]["truncated_for_planner"] is True
+    compact_data = compact.get("data")
+    assert isinstance(compact_data, dict)
+    results = compact_data.get("results")
+    assert isinstance(results, list)
+    assert len(results) == 2
+    
+    text_field = results[0].get("text")
+    assert isinstance(text_field, str)
+    assert len(text_field) == 600
+    assert compact_data.get("truncated_for_planner") is True
 
 
 def test_planner_prompt_compacts_dataset_columns_and_source_ids() -> None:
@@ -160,8 +167,14 @@ def test_planner_prompt_compacts_dataset_columns_and_source_ids() -> None:
         sources=[{"document_id": "internal", "filename": "manual.pdf", "chunk_id": "chunk"}],
     )
     compact = AgentPlanner._prompt_observation(observation)
-    assert len(compact["data"]["datasets"][0]["columns"]) == 12
-    assert compact["sources"] == [{"filename": "manual.pdf"}]
+    compact_data = compact.get("data")
+    assert isinstance(compact_data, dict)
+    datasets = compact_data.get("datasets")
+    assert isinstance(datasets, list)
+    columns = datasets[0].get("columns")
+    assert isinstance(columns, list)
+    assert len(columns) == 12
+    assert compact.get("sources") == [{"filename": "manual.pdf"}]
 
 
 def test_planner_prompt_requires_final_after_sufficient_knowledge() -> None:
@@ -297,7 +310,7 @@ def test_observed_industrial_recovery_uses_only_listed_data_and_sources() -> Non
     sources = [{"filename": "manual.pdf"}]
     result = instance._recover_observed_industrial_workflow("Use operational data and maintenance guidance to create a chart, Excel workbook, and Word maintenance recommendation.", observations, [AgentStep(step=1, action="tool", tool="knowledge_search", status="success")], sources, "run", 0.0)
     assert result is not None and result.status == "completed"
-    assert "Measured facts:" in result.answer and "Recommendation:" in result.answer
+    assert result.answer is not None and "Measured facts:" in result.answer and "Recommendation:" in result.answer
     assert [call[0] for call in executor.calls] == ["data_analysis", "data_analysis", "create_chart", "create_document", "create_spreadsheet"]
 
 

@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.core.config import settings
-from app.schemas.artifacts import ArtifactMetadata
+from app.schemas.artifacts import ArtifactMetadata, ArtifactType
 
 
 class ArtifactNotFoundError(Exception):
@@ -27,7 +27,7 @@ class ArtifactService:
         if not self.metadata_file.exists():
             self.metadata_file.write_text("{}", encoding="utf-8")
 
-    def register(self, source: Path, filename: str, artifact_type: ArtifactMetadata.__annotations__["artifact_type"], source_tool: str, *, job_id: str | None = None, source_document_ids: list[str] | None = None, provenance: dict[str, str] | None = None) -> ArtifactMetadata:
+    def register(self, source: Path, filename: str, artifact_type: ArtifactType, source_tool: str, *, job_id: str | None = None, source_document_ids: list[str] | None = None, provenance: dict[str, str] | None = None) -> ArtifactMetadata:
         """Copy one validated local generated file into controlled artifact storage."""
         if not source.is_file():
             raise ValueError("Generated artifact is unavailable.")
@@ -57,6 +57,16 @@ class ArtifactService:
         if not matches:
             raise ArtifactNotFoundError("Artifact file is unavailable.")
         return matches[0]
+
+    def clear(self) -> None:
+        """Clear all generated artifacts and reset the metadata registry."""
+        for item in self.directory.iterdir():
+            if item.is_file() and item.name != "metadata.json":
+                try:
+                    item.unlink(missing_ok=True)
+                except OSError:
+                    pass
+        self._save_records({})
 
     def _records(self) -> dict[str, dict[str, object]]:
         """Read the lightweight local metadata registry."""

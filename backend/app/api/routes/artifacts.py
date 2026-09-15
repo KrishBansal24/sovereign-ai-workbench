@@ -23,3 +23,10 @@ def download_artifact(artifact_id: str) -> FileResponse:
     except ArtifactNotFoundError as error:
         raise HTTPException(status_code=404, detail="Artifact not found.") from error
     return FileResponse(path, filename=path.name.split("_", 1)[-1])
+
+
+@router.delete("")
+def clear_artifacts() -> dict[str, str]:
+    """Clear all safely managed local generated artifacts."""
+    artifact_service.clear()
+    return {"status": "cleared"}

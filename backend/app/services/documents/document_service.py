@@ -10,6 +10,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
+from typing import Any, TypedDict
 
 from app.core.config import settings
 from app.schemas.document import DocumentMetadata, ExtractionConfirmation
@@ -61,6 +62,14 @@ ALLOWED_MIME_TYPES = {
 }
 OCR_TEXT_THRESHOLD = 20
 
+
+class DocumentExtractionDetails(TypedDict, total=False):
+    processed_pages: int
+    text_pages: list[int]
+    ocr_pages: list[int]
+    unprocessed_ocr_pages: list[int]
+    important_disagreements: list[dict[str, Any]]
+    structured_metadata: dict[str, Any]
 
 class DocumentService:
     """Coordinate upload validation, controlled storage, parsers, and metadata.
@@ -136,7 +145,7 @@ class DocumentService:
                 extraction_method=origin,
                 reliability_status=reliability_status,
                 extraction_warnings=extraction_warnings,
-                extraction_disagreements=[item.model_dump() for item in getattr(reliability, "important_disagreements", [])] if 'reliability' in locals() and reliability else [],
+                extraction_disagreements=page_details.get("important_disagreements", []),
                 job_id=job.job_id,
                 processed_pages=page_details.get("processed_pages"),
                 text_pages=page_details.get("text_pages", []),
@@ -209,7 +218,10 @@ class DocumentService:
             raise DocumentValidationError("The requested confirmation field is not pending.")
         if confirmation.selected_source == "manual" and not (confirmation.manual_value or "").strip():
             raise DocumentValidationError("A manual value is required when selected_source is manual.")
-        confirmed_value = confirmation.manual_value.strip() if confirmation.selected_source == "manual" else (match.ocr_value if confirmation.selected_source == "ocr" else match.vision_value)
+        if confirmation.selected_source == "manual":
+            confirmed_value = (confirmation.manual_value or "").strip()
+        else:
+            confirmed_value = match.ocr_value if confirmation.selected_source == "ocr" else match.vision_value
         provenance = {"field_or_token": match.field_or_token, "ocr_value": match.ocr_value, "vision_value": match.vision_value, "user_confirmed_value": confirmed_value, "verification_source": "user"}
         remaining = [item for item in metadata.extraction_disagreements if item.field_or_token != match.field_or_token]
         updated = metadata.model_copy(update={"extraction_disagreements": remaining, "confirmations": [*metadata.confirmations, provenance], "reliability_status": DocumentReliabilityStatus.ACCEPTED_WITH_WARNINGS if not remaining else DocumentReliabilityStatus.USER_CONFIRMATION_REQUIRED, "index_eligible": not remaining})
@@ -246,7 +258,7 @@ class DocumentService:
             raise DocumentValidationError("The uploaded file is not a valid JPEG.")
         return file_type, extension
 
-    def _extract(self, file_type: str, content: bytes) -> tuple[str, int | None, str, str, list[str], dict[str, object]]:
+    def _extract(self, file_type: str, content: bytes) -> tuple[str, int | None, str, str, list[str], DocumentExtractionDetails]:
         """Dispatch validated content to exactly one deterministic parser."""
         if file_type == "pdf":
             pages = pdf_parser.extract_pages(content)
@@ -258,6 +270,7 @@ class DocumentService:
             unprocessed = ocr_needed[settings.ocr_max_pages:]
             to_ocr = ocr_needed[:settings.ocr_max_pages]
             try:
+                result = None
                 if to_ocr:
                     result = ocr_service.pdf(content, to_ocr)
                     merged.update({page.page_number: page.text for page in result.pages})
@@ -267,9 +280,13 @@ class DocumentService:
                     warnings.append(f"{len(unprocessed)} scan page(s) were not OCR processed because of the configured OCR page limit.")
                 if not ocr_needed:
                     return text, len(pages), "parser", "accepted", warnings, {"processed_pages": len(pages), "text_pages": text_pages, "ocr_pages": [], "unprocessed_ocr_pages": []}
-                reliability = extraction_reliability_service.decide(result.quality or ocr_quality_service.assess_text(result.text))
+                
+                if result is None:
+                    reliability = extraction_reliability_service.decide(ocr_quality_service.assess_text(text))
+                else:
+                    reliability = extraction_reliability_service.decide(result.quality or ocr_quality_service.assess_text(result.text))
                 status = "review_required" if unprocessed else reliability.status
-                return text, len(pages), "mixed_parser_ocr", status, warnings + reliability.issues + reliability.warnings, {"processed_pages": len(pages) - len(unprocessed), "text_pages": text_pages, "ocr_pages": ocr_pages, "unprocessed_ocr_pages": unprocessed}
+                return text, len(pages), "mixed_parser_ocr", status, warnings + reliability.issues + reliability.warnings, {"processed_pages": len(pages) - len(unprocessed), "text_pages": text_pages, "ocr_pages": ocr_pages, "unprocessed_ocr_pages": unprocessed, "important_disagreements": [item.model_dump() for item in getattr(reliability, "important_disagreements", [])]}
             except (OCRUnavailableError, OCRProcessingError):
                 # Preserve Phase 2's usable upload path until Windows Tesseract
                 # and the optional local renderer are installed.
@@ -281,6 +298,8 @@ class DocumentService:
             from io import BytesIO
             workbook = load_workbook(BytesIO(content), read_only=True, data_only=True)
             sheet = workbook.active
+            if sheet is None:
+                raise DocumentProcessingError("No active sheet found in XLSX document.")
             rows = list(sheet.iter_rows(values_only=True))[:100]
             return "\n".join(", ".join("" if value is None else str(value) for value in row) for row in rows), None, "parser", "accepted", [], {}
         if file_type == "py":
@@ -302,11 +321,12 @@ class DocumentService:
                 try:
                     from app.services.multimodal.vision_service import vision_service
                     transcription = vision_service.transcribe_bytes(content)
+                    assert result.quality is not None, "Quality must be present if reliability was calculated and returned can_index=False from decide(quality)."
                     reliability = extraction_reliability_service.decide_with_vision(result.text, result.quality, transcription.text)
-                    return result.text, 1, "ocr_vision_agreement" if reliability.can_index else "ocr_vision_disagreement", reliability.status, reliability.issues + reliability.warnings, {}
+                    return result.text, 1, "ocr_vision_agreement" if reliability.can_index else "ocr_vision_disagreement", reliability.status, reliability.issues + reliability.warnings, {"important_disagreements": [item.model_dump() for item in getattr(reliability, "important_disagreements", [])]}
                 except Exception:
                     pass
-            return result.text, 1, result.extraction_method, reliability.status if reliability else "review_required", (reliability.issues + reliability.warnings) if reliability else ["OCR quality could not be assessed."], {}
+            return result.text, 1, result.extraction_method, reliability.status if reliability else "review_required", (reliability.issues + reliability.warnings) if reliability else ["OCR quality could not be assessed."], {"important_disagreements": [item.model_dump() for item in getattr(reliability, "important_disagreements", [])] if reliability else []}
         return text_parser.extract_text(content), None, "parser", "accepted", [], {}
 
     def _ensure_storage(self) -> None:

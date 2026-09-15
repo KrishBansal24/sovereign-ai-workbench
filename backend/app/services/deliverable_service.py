@@ -2,10 +2,13 @@
 
 import re
 import tempfile
+from copy import copy
 from pathlib import Path
 
 from docx import Document
 from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Font
+from openpyxl.utils import get_column_letter
 from pptx import Presentation
 from reportlab.pdfgen import canvas
 from pypdf import PdfReader
@@ -38,9 +41,9 @@ class DeliverableService:
                 document.add_heading("Sources", level=1)
                 for source in spec.sources:
                     document.add_paragraph(source, style="List Bullet")
-            document.save(output)
+            document.save(str(output))
             # Validate by reopening and asserting the requested title survived.
-            reopened = Document(output)
+            reopened = Document(str(output))
             if not output.exists() or output.stat().st_size == 0 or spec.title not in "\n".join(item.text for item in reopened.paragraphs):
                 raise ValueError("Generated DOCX validation failed.")
             return artifact_service.register(output, safe_filename, "document", "docx_generator")
@@ -49,24 +52,55 @@ class DeliverableService:
         """Generate and reopen a local XLSX workbook from validated tabular data."""
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / self._name(spec.filename, ".xlsx")
-            workbook = Workbook(); sheet = workbook.active; sheet.title = self._sheet_name(spec.sheet_name); sheet.append(spec.columns)
+            workbook = Workbook()
+            sheet = workbook.active
+            if sheet is None:
+                raise ValueError("Active sheet is unexpectedly None")
+            sheet.title = self._sheet_name(spec.sheet_name)
+            sheet.append(spec.columns)
             for row in spec.rows: sheet.append(row)
-            for cell in sheet[1]: cell.font = cell.font.copy(bold=True)
-            for column in sheet.columns:
-                sheet.column_dimensions[column[0].column_letter].width = min(40, max(12, max(len(str(cell.value or "")) for cell in column) + 2))
-            workbook.save(output)
-            reopened = load_workbook(output, data_only=False)
-            if reopened.sheetnames != [sheet.title] or list(reopened.active.values)[0] != tuple(spec.columns): raise ValueError("Generated XLSX validation failed.")
+            for cell in sheet[1]:
+                if cell.font:
+                    new_font = copy(cell.font)
+                    new_font.bold = True
+                    cell.font = new_font
+                else:
+                    cell.font = Font(bold=True)
+            for column_index, column_cells in enumerate(sheet.iter_cols(), start=1):
+                if column_cells:
+                    column_letter = get_column_letter(column_index)
+                    sheet.column_dimensions[column_letter].width = min(40, max(12, max(len(str(cell.value or "")) for cell in column_cells) + 2))
+            workbook.save(str(output))
+            reopened = load_workbook(str(output), data_only=False)
+            reopened_active = reopened.active
+            if reopened_active is None:
+                raise ValueError("Reopened active sheet is None")
+            if reopened.sheetnames != [sheet.title] or list(reopened_active.values)[0] != tuple(spec.columns): raise ValueError("Generated XLSX validation failed.")
             return artifact_service.register(output, output.name, "spreadsheet", "xlsx_generator")
 
     def create_presentation(self, spec: TableSpec) -> ArtifactMetadata:
         """Generate and reopen a simple local PPTX summary."""
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary) / self._name(spec.filename, ".pptx")
-            presentation = Presentation(); title_slide = presentation.slides.add_slide(presentation.slide_layouts[0]); title_slide.shapes.title.text = spec.title
-            slide = presentation.slides.add_slide(presentation.slide_layouts[1]); slide.shapes.title.text = "Summary"; slide.placeholders[1].text = "\n".join(" • " + " | ".join(map(str,row)) for row in spec.rows[:10]); presentation.save(output)
-            reopened = Presentation(output)
-            if len(reopened.slides) < 2 or reopened.slides[0].shapes.title.text != spec.title: raise ValueError("Generated PPTX validation failed.")
+            presentation = Presentation()
+            title_slide = presentation.slides.add_slide(presentation.slide_layouts[0])
+            if not getattr(title_slide.shapes.title, "has_text_frame", False) or title_slide.shapes.title.text_frame is None:
+                raise ValueError("No title frame")
+            title_slide.shapes.title.text_frame.text = spec.title
+            slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+            if not getattr(slide.shapes.title, "has_text_frame", False) or slide.shapes.title.text_frame is None:
+                raise ValueError("No slide title frame")
+            slide.shapes.title.text_frame.text = "Summary"
+            body = slide.placeholders[1]
+            if not getattr(body, "has_text_frame", False) or body.text_frame is None:
+                raise ValueError("No body frame")
+            body.text_frame.text = "\n".join(" • " + " | ".join(map(str,row)) for row in spec.rows[:10])
+            presentation.save(str(output))
+            reopened = Presentation(str(output))
+            if len(reopened.slides) < 2:
+                raise ValueError("Generated PPTX validation failed.")
+            title_shape = reopened.slides[0].shapes.title
+            if not getattr(title_shape, "has_text_frame", False) or title_shape.text_frame is None or title_shape.text_frame.text != spec.title: raise ValueError("Generated PPTX validation failed.")
             return artifact_service.register(output, output.name, "presentation", "pptx_generator")
 
     def create_pdf(self, spec: TableSpec) -> ArtifactMetadata:

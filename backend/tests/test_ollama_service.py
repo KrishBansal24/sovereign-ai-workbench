@@ -1,7 +1,9 @@
 """Contracts for concise, local-only Ollama generation requests."""
 
 from types import SimpleNamespace
+from typing import cast
 
+from app.core.config import Settings
 from app.services.llm.ollama_service import OllamaService
 
 
@@ -29,10 +31,12 @@ def test_chat_disables_model_thinking_for_user_facing_answers(monkeypatch) -> No
     import app.services.llm.ollama_service as module
 
     monkeypatch.setattr(module.requests, "post", post)
-    service = OllamaService(SimpleNamespace(ollama_base_url="http://127.0.0.1:11434", ollama_timeout_seconds=12, ollama_model="qwen3:8b"))
+    service = OllamaService(cast(Settings, SimpleNamespace(ollama_base_url="http://127.0.0.1:11434", ollama_timeout_seconds=12, ollama_model="qwen3:8b")))
 
     assert service.chat_with_model("qwen3:8b", "Answer from local context.") == "Local answer"
-    assert captured["json"]["think"] is False
+    captured_json = captured.get("json")
+    assert isinstance(captured_json, dict)
+    assert captured_json.get("think") is False
 
 
 def test_planner_json_mode_requests_local_structured_output(monkeypatch) -> None:
@@ -45,6 +49,8 @@ def test_planner_json_mode_requests_local_structured_output(monkeypatch) -> None
     import app.services.llm.ollama_service as module
 
     monkeypatch.setattr(module.requests, "post", post)
-    service = OllamaService(SimpleNamespace(ollama_base_url="http://127.0.0.1:11434", ollama_timeout_seconds=12, ollama_model="qwen3:8b"))
+    service = OllamaService(cast(Settings, SimpleNamespace(ollama_base_url="http://127.0.0.1:11434", ollama_timeout_seconds=12, ollama_model="qwen3:8b")))
     assert service.chat_json_with_model("qwen3:8b", "Return an action.") == "Local answer"
-    assert captured["json"]["format"] == "json" and captured["json"]["think"] is False
+    captured_json = captured.get("json")
+    assert isinstance(captured_json, dict)
+    assert captured_json.get("format") == "json" and captured_json.get("think") is False

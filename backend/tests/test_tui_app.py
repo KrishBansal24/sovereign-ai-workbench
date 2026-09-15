@@ -5,9 +5,10 @@ import asyncio
 from textual.widgets import Button, Input, Select, Static, TextArea
 
 from tui.app import FolderPreviewModal, SovereignTUI, agent_step_label
+from tui.services.api_client import APIClient
 
 
-class _LocalBackendStub:
+class _LocalBackendStub(APIClient):
     """Enough backend state for navigation tests without a network service."""
 
     async def health(self): return {"backend": "online", "ollama": "available"}
