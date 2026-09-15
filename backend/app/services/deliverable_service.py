@@ -2,7 +2,6 @@
 
 import re
 import tempfile
-from copy import copy
 from pathlib import Path
 
 from docx import Document
@@ -23,6 +22,30 @@ from app.services.artifact_service import artifact_service
 
 class DeliverableService:
     """Generate professional but deliberately simple local DOCX reports."""
+
+    @staticmethod
+    def _set_shape_text(shape: object | None, text: str) -> None:
+        """Assign text to a python-pptx shape via its text_frame, or raise."""
+        if shape is None:
+            raise ValueError("Expected a shape but got None.")
+        if not hasattr(shape, "has_text_frame") or not shape.has_text_frame:
+            raise ValueError("Shape does not support text frames.")
+        tf = shape.text_frame  # type: ignore[attr-defined]
+        if tf is None:
+            raise ValueError("Shape text_frame is None.")
+        tf.text = text
+
+    @staticmethod
+    def _get_shape_text(shape: object | None) -> str:
+        """Read text from a python-pptx shape via its text_frame, or raise."""
+        if shape is None:
+            raise ValueError("Expected a shape but got None.")
+        if not hasattr(shape, "has_text_frame") or not shape.has_text_frame:
+            raise ValueError("Shape does not support text frames.")
+        tf = shape.text_frame  # type: ignore[attr-defined]
+        if tf is None:
+            raise ValueError("Shape text_frame is None.")
+        return str(tf.text)
 
     def create_document(self, spec: DocumentSpec) -> ArtifactMetadata:
         """Create, reopen, validate, and register a DOCX from structured content."""
@@ -60,12 +83,7 @@ class DeliverableService:
             sheet.append(spec.columns)
             for row in spec.rows: sheet.append(row)
             for cell in sheet[1]:
-                if cell.font:
-                    new_font = copy(cell.font)
-                    new_font.bold = True
-                    cell.font = new_font
-                else:
-                    cell.font = Font(bold=True)
+                cell.font = Font(bold=True)
             for column_index, column_cells in enumerate(sheet.iter_cols(), start=1):
                 if column_cells:
                     column_letter = get_column_letter(column_index)
@@ -84,23 +102,17 @@ class DeliverableService:
             output = Path(temporary) / self._name(spec.filename, ".pptx")
             presentation = Presentation()
             title_slide = presentation.slides.add_slide(presentation.slide_layouts[0])
-            if not getattr(title_slide.shapes.title, "has_text_frame", False) or title_slide.shapes.title.text_frame is None:
-                raise ValueError("No title frame")
-            title_slide.shapes.title.text_frame.text = spec.title
+            self._set_shape_text(title_slide.shapes.title, spec.title)
             slide = presentation.slides.add_slide(presentation.slide_layouts[1])
-            if not getattr(slide.shapes.title, "has_text_frame", False) or slide.shapes.title.text_frame is None:
-                raise ValueError("No slide title frame")
-            slide.shapes.title.text_frame.text = "Summary"
+            self._set_shape_text(slide.shapes.title, "Summary")
             body = slide.placeholders[1]
-            if not getattr(body, "has_text_frame", False) or body.text_frame is None:
-                raise ValueError("No body frame")
-            body.text_frame.text = "\n".join(" • " + " | ".join(map(str,row)) for row in spec.rows[:10])
+            self._set_shape_text(body, "\n".join(" • " + " | ".join(map(str, row)) for row in spec.rows[:10]))
             presentation.save(str(output))
             reopened = Presentation(str(output))
             if len(reopened.slides) < 2:
                 raise ValueError("Generated PPTX validation failed.")
-            title_shape = reopened.slides[0].shapes.title
-            if not getattr(title_shape, "has_text_frame", False) or title_shape.text_frame is None or title_shape.text_frame.text != spec.title: raise ValueError("Generated PPTX validation failed.")
+            reopened_title = self._get_shape_text(reopened.slides[0].shapes.title)
+            if reopened_title != spec.title: raise ValueError("Generated PPTX validation failed.")
             return artifact_service.register(output, output.name, "presentation", "pptx_generator")
 
     def create_pdf(self, spec: TableSpec) -> ArtifactMetadata:

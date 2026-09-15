@@ -10,7 +10,7 @@ from textual.widgets.option_list import Option
 class CommandModal(ModalScreen[str | None]):
     BINDINGS = [Binding("escape", "dismiss_modal", "Close")]
     
-    COMMANDS = [
+    PALETTE_COMMANDS: list[tuple[str, str]] = [
         ("Ask Agent", "agent"), 
         ("Upload File", "upload-file"), 
         ("Upload Folder", "upload-folder"), 
@@ -31,7 +31,7 @@ class CommandModal(ModalScreen[str | None]):
             yield OptionList(id="command-palette-list")
             
     def on_mount(self) -> None:
-        self.populate_options(self.COMMANDS)
+        self.populate_options(self.PALETTE_COMMANDS)
         self.query_one("#command-search", Input).focus()
         
     def populate_options(self, commands: list[tuple[str, str]]) -> None:
@@ -43,7 +43,7 @@ class CommandModal(ModalScreen[str | None]):
     @on(Input.Changed, "#command-search")
     def filter_commands(self) -> None:
         query = self.query_one("#command-search", Input).value.lower()
-        filtered = [(label, cmd_id) for label, cmd_id in self.COMMANDS if query in label.lower()]
+        filtered = [(label, cmd_id) for label, cmd_id in self.PALETTE_COMMANDS if query in label.lower()]
         self.populate_options(filtered)
         
     @on(Input.Submitted, "#command-search")

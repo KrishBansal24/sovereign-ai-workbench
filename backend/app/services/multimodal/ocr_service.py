@@ -40,6 +40,17 @@ class OCRResult(BaseModel):
 class OCRService:
     """OCR application-owned bytes with replaceable local-engine integration."""
 
+    @staticmethod
+    def _normalize_ocr_text(raw: object) -> str:
+        """Narrow third-party OCR output to str at the service boundary."""
+        if isinstance(raw, str):
+            return raw
+        if isinstance(raw, (bytes, bytearray)):
+            return raw.decode("utf-8", errors="replace")
+        raise OCRProcessingError(
+            f"OCR engine returned unexpected type {type(raw).__name__}; expected str."
+        )
+
     def image(self, content: bytes) -> OCRResult:
         """Extract text from validated image bytes through local Tesseract."""
         started_at = time.perf_counter()
@@ -54,15 +65,17 @@ class OCRService:
             image = ImageOps.exif_transpose(image)
             if image.width * image.height > settings.image_max_pixels:
                 raise OCRProcessingError("The image is too large to process safely.")
-            text = pytesseract.image_to_string(image)
+            raw_text = pytesseract.image_to_string(image)
         except ImportError as error:
             raise OCRUnavailableError("Local OCR dependencies are unavailable.") from error
         except Exception as error:
             raise OCRProcessingError("The image could not be OCR processed.") from error
-        best_text = text; method = "ocr"
+        best_text: str = self._normalize_ocr_text(raw_text)
+        method = "ocr"
         quality = ocr_quality_service.assess_text(best_text)
         if quality.requires_retry and settings.ocr_max_attempts > 1:
-            retry_text = pytesseract.image_to_string(Image.open(BytesIO(ocr_quality_service.preprocess(content))))
+            retry_raw = pytesseract.image_to_string(Image.open(BytesIO(ocr_quality_service.preprocess(content))))
+            retry_text: str = self._normalize_ocr_text(retry_raw)
             retry_quality = ocr_quality_service.assess_text(retry_text)
             if retry_quality.score > quality.score:
                 best_text, quality, method = retry_text, retry_quality, "ocr_preprocessed"
